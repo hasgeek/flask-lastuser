@@ -59,6 +59,7 @@ class UserManager(object):
         # Username, fullname and email may have changed, so set them again
         # If the user model does not have these fields, they will not persist beyond one request
         # If we do set these, they won't be saved unless the transaction is committed
-        g.user.username = g.lastuserinfo.username
-        g.user.fullname = g.lastuserinfo.fullname
-        g.user.email = g.lastuserinfo.email or None
+        if g.lastuserinfo:
+            g.user.username = g.lastuserinfo.username
+            g.user.fullname = g.lastuserinfo.fullname
+            g.user.email = g.lastuserinfo.email or None

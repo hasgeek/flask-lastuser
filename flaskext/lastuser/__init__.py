@@ -16,7 +16,7 @@ import urlparse
 import httplib2
 import urllib
 
-from flask import session, g, redirect, url_for, request, json
+from flask import session, g, redirect, url_for, request, json, flash
 
 
 class LastUserConfigException(Exception):
@@ -160,6 +160,9 @@ class LastUser(object):
                 endpoint = self.token_endpoint,
                 grant_type = 'authorization_code',
                 params = {'scope': 'id'})
+            if 'messages' in result:
+                for item in result['messages']:
+                    flash(item['message'], item['category'])
             userinfo = result.get('userinfo')
             session['lastuser_userinfo'] = userinfo
             if userinfo is not None:
