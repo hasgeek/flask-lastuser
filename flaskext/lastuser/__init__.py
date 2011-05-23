@@ -12,7 +12,6 @@
 from __future__ import absolute_import
 from functools import wraps
 import uuid
-from base64 import urlsafe_b64encode
 import urlparse
 import httplib2
 import urllib
@@ -28,7 +27,7 @@ class LastUserException(Exception):
 
 
 def randomstring():
-    return urlsafe_b64encode(uuid.uuid4().bytes).rstrip('=')
+    return unicode(uuid.uuid4())
 
 
 class UserInfo(object):
@@ -55,6 +54,7 @@ class LastUser(object):
         self._redirect_uri_name = None
         self._autherrorhandler = None
         self._servicehandler = None
+        self._usermanager = None
 
         self.lastuser_server = None
         self.auth_endpoint = None
@@ -70,10 +70,14 @@ class LastUser(object):
         self.lastuser_server = app.config['LASTUSER_SERVER']
         self.auth_endpoint = app.config.get('LASTUSER_ENDPOINT_AUTH', 'auth')
         self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
+        self.logout_endpoint = app.config.get('LASTUSER_ENDPOINT_LOGOUT', 'logout')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
 
         self.app.before_request(self.before_request)
+
+    def init_usermanager(self, um):
+        self._usermanager = um
 
     def make_client(self):
         return Client2(self.client_id, self.client_secret, self.lastuser_server)
@@ -81,15 +85,17 @@ class LastUser(object):
     def before_request(self):
         info = session.get('lastuser_userinfo')
         if info is not None:
-            user = UserInfo(userid = info.get('userid'),
-                            username = info.get('username'),
-                            fullname = info.get('fullname'),
-                            email = info.get('email'))
-            g.user = user
+            userinfo = UserInfo(userid = info.get('userid'),
+                                username = info.get('username'),
+                                fullname = info.get('fullname'),
+                                email = info.get('email'))
+            g.lastuserinfo = userinfo
         else:
-            g.user = None
+            g.lastuserinfo = None
+        if self._usermanager:
+            self._usermanager.before_request()
 
-    def loginhandler(self, f):
+    def login_handler(self, f):
         """
         Decorator for login handler route.
         """
@@ -113,20 +119,23 @@ class LastUser(object):
         self._loginhandler = f
         return decorated_function
 
-    def logouthandler(self, f):
+    def logout_handler(self, f):
         """
         Decorator for logout handler route.
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            result = f(*args, **kwargs)
-            g.user = None
+            next = f(*args, **kwargs)
+            g.lastuserinfo = None
             session.pop('lastuser_userinfo', None)
-            return result
+            if not (next.startswith('http:') or next.startswith('https:')):
+                next = urlparse.urljoin(request.url_root, next)
+            return redirect(urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
+                % (urllib.quote(self.client_id), urllib.quote(next)))
         self._logouthandler = f
         return decorated_function
 
-    def authhandler(self, f):
+    def auth_handler(self, f):
         """
         Set the login cookies.
         """
@@ -154,14 +163,16 @@ class LastUser(object):
             userinfo = result.get('userinfo')
             session['lastuser_userinfo'] = userinfo
             if userinfo is not None:
-                g.user = UserInfo(userinfo.get('userid'), userinfo.get('username'),
+                g.lastuserinfo = UserInfo(userinfo.get('userid'), userinfo.get('username'),
                     userinfo.get('fullname'), userinfo.get('email'))
+            if self._usermanager:
+                self._usermanager.login_listener()
             return f(*args, **kw)
         self._authhandler = f
         self._redirect_uri_name = f.__name__
         return decorated_function
 
-    def autherrorhandler(self, f):
+    def auth_error_handler(self, f):
         """
         Handler for authorization errors
         """
@@ -171,7 +182,7 @@ class LastUser(object):
         self._autherrorhandler = f
         return decorated_function
 
-    def servicehandler(self, f):
+    def service_handler(self, f):
         """
         Handler for service requests from LastUser, used to notify of new
         resource access tokens and user info changes.
@@ -181,6 +192,7 @@ class LastUser(object):
             return f(*args, **kw)
         self._servicehandler = f
         return decorated_function
+
 
 # OAuth2 Client2 class adapted from https://github.com/OfflineLabs/python-oauth2/
 # We use our own copy since there's no standard Python OAuth2 implementation
@@ -266,20 +278,3 @@ class Client2(object):
 
         return response_args
 
-
-    def request(self, base_uri, access_token=None, method='GET', body=None,
-        headers=None, params=None, token_param='oauth_token'):
-        """Make a request to the OAuth API"""
-
-        args = {}
-        args.update(params or {})
-        if access_token is not None and method == 'GET':
-            args[token_param] = access_token
-        elif access_token is None and method == 'GET':
-            args.update({
-                'client_id': self.client_id,
-                'client_secret': self.client_secret,
-            })
-
-        uri = '%s?%s' % (base_uri, urllib.urlencode(args))
-        return self.http.request(uri, method=method, body=body, headers=headers)
