@@ -95,6 +95,19 @@ class LastUser(object):
         if self._usermanager:
             self._usermanager.before_request()
 
+    def requires_login(self, f):
+        """
+        Decorator for functions that require login.
+        """
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if g.lastuserinfo is None:
+                if not self._loginhandler:
+                    abort(403)
+                return redirect(url_for(self._loginhandler.__name__, next=request.url))
+            return f(*args, **kwargs)
+        return decorated_function
+
     def login_handler(self, f):
         """
         Decorator for login handler route.
