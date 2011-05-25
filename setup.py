@@ -30,6 +30,7 @@ setup(
     platforms='any',
     install_requires=[
         'Flask',
+        'httplib2',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',

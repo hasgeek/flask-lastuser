@@ -11,12 +11,13 @@
 
 from __future__ import absolute_import
 from functools import wraps
+from base64 import b64encode
 import uuid
 import urlparse
 import httplib2
 import urllib
 
-from flask import session, g, redirect, url_for, request, json, flash
+from flask import session, g, redirect, url_for, request, json, flash, abort
 
 
 class LastUserConfigException(Exception):
@@ -34,11 +35,12 @@ class UserInfo(object):
     """
     User info object that is inserted into the context variable container.
     """
-    def __init__(self, userid, username, fullname, email=None):
+    def __init__(self, userid, username, fullname, email=None, permissions=()):
         self.userid = userid
         self.username = username
         self.fullname = fullname
         self.email = email
+        self.permissions = permissions
 
 
 class LastUser(object):
@@ -48,13 +50,10 @@ class LastUser(object):
     def __init__(self, app=None):
         self.app = app
 
-        self._loginhandler = None
-        self._logouthandler = None
-        self._authhandler = None
+        self._login_handler = None
         self._redirect_uri_name = None
-        self._autherrorhandler = None
-        self._servicehandler = None
-        self._usermanager = None
+        self._auth_error_handler = None
+        self.usermanager = None
 
         self.lastuser_server = None
         self.auth_endpoint = None
@@ -77,10 +76,7 @@ class LastUser(object):
         self.app.before_request(self.before_request)
 
     def init_usermanager(self, um):
-        self._usermanager = um
-
-    def make_client(self):
-        return Client2(self.client_id, self.client_secret, self.lastuser_server)
+        self.usermanager = um
 
     def before_request(self):
         info = session.get('lastuser_userinfo')
@@ -88,12 +84,13 @@ class LastUser(object):
             userinfo = UserInfo(userid = info.get('userid'),
                                 username = info.get('username'),
                                 fullname = info.get('fullname'),
-                                email = info.get('email'))
+                                email = info.get('email'),
+                                permissions = info.get('permissions', ()))
             g.lastuserinfo = userinfo
         else:
             g.lastuserinfo = None
-        if self._usermanager:
-            self._usermanager.before_request()
+        if self.usermanager:
+            self.usermanager.before_request()
 
     def requires_login(self, f):
         """
@@ -102,11 +99,25 @@ class LastUser(object):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             if g.lastuserinfo is None:
-                if not self._loginhandler:
+                if not self._login_handler:
                     abort(403)
-                return redirect(url_for(self._loginhandler.__name__, next=request.url))
+                return redirect(url_for(self._login_handler.__name__, next=request.url))
             return f(*args, **kwargs)
         return decorated_function
+
+    def requires_permission(self, permission):
+        def inner(f):
+            @wraps(f)
+            def decorated_function(*args, **kwargs):
+                if g.lastuserinfo is None:
+                    if not self._login_handler:
+                        abort(403)
+                    return redirect(url_for(self._login_handler.__name__, next=request.url))
+                if permission not in g.lastuserinfo.permissions:
+                    abort(403)
+                return f(*args, **kwargs)
+            return decorated_function
+        return inner
 
     def login_handler(self, f):
         """
@@ -121,15 +132,16 @@ class LastUser(object):
             session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
                     next=request.args.get('next') or request.referrer or None,
                     _external=True)
-            client = self.make_client()
-            return redirect(client.authorization_url(
-                redirect_uri = session['lastuser_redirect_uri'],
-                endpoint = self.auth_endpoint,
-                params = {'response_type': 'code',
-                          'scope': data.get('scope', 'id'),
-                          'state': session['lastuser_state']},
-                ))
-        self._loginhandler = f
+
+            return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
+                urllib.urlencode({
+                    'response_type': 'code',
+                    'client_id': self.client_id,
+                    'redirect_uri': session['lastuser_redirect_uri'],
+                    'scope': data.get('scope', 'id'),
+                    'state': session['lastuser_state'],
+                })))
+        self._login_handler = f
         return decorated_function
 
     def logout_handler(self, f):
@@ -145,7 +157,6 @@ class LastUser(object):
                 next = urlparse.urljoin(request.url_root, next)
             return redirect(urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
                 % (urllib.quote(self.client_id), urllib.quote(next)))
-        self._logouthandler = f
         return decorated_function
 
     def auth_handler(self, f):
@@ -154,37 +165,65 @@ class LastUser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kw):
-            if not self._autherrorhandler:
+            # Step 1: Validations
+            # Validation 1: Check if there is an error handler
+            if not self._auth_error_handler:
                 raise LastUserConfigException("No authorization error handler")
+            # Validation 2: Check for CSRF attacks
             state = request.args.get('state')
             if state is None or state != session.get('lastuser_state'):
-                return self._autherrorhandler(error='csrf_invalid')
+                return self._auth_error_handler(error='csrf_invalid')
+            # Validation 3: Check if request for auth code was successful
             if 'error' in request.args:
-                return self._autherrorhandler(
+                return self._auth_error_handler(
                     error = request.args['error'],
                     error_description = request.args.get('error_description'),
                     error_uri = request.args.get('error_uri'))
+            # Validation 4: Check if we got an auth code
             code = request.args.get('code')
             if not code:
-                return self._autherrorhandler(error='code_missing')
-            client = self.make_client()
-            result = client.access_token(code,
-                redirect_uri = session.get('lastuser_redirect_uri'),
-                endpoint = self.token_endpoint,
-                grant_type = 'authorization_code',
-                params = {'scope': 'id'})
+                return self._auth_error_handler(error='code_missing')
+            # Validations done
+
+            # Step 2: Get the auth token
+            http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
+            http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
+                "POST",
+                headers = {'Content-type': 'application/x-www-form-urlencoded',
+                           'Authorization': "Basic %s" % b64encode("%s:%s" % (self.client_id, self.client_secret))},
+                body = urllib.urlencode({
+                    'client_id': self.client_id,
+                    'code': code,
+                    'redirect_uri': session.get('lastuser_redirect_uri'),
+                    'grant_type': 'authorization_code',
+                    'scope': self._login_handler().get('scope', '')
+                    })
+                )
+
+            result = json.loads(http_content)
+
+            # Step 3: Check if auth token was refused
+            if 'error' in result:
+                return self._auth_error_handler(
+                    error = result['error'],
+                    error_description = result.get('error_description'),
+                    error_uri = result.get('error_uri'))
+
+            # Step 4.1: All good. Relay any messages we received
             if 'messages' in result:
                 for item in result['messages']:
                     flash(item['message'], item['category'])
+            # Step 4.2: Save user info received
             userinfo = result.get('userinfo')
             session['lastuser_userinfo'] = userinfo
             if userinfo is not None:
                 g.lastuserinfo = UserInfo(userinfo.get('userid'), userinfo.get('username'),
                     userinfo.get('fullname'), userinfo.get('email'))
-            if self._usermanager:
-                self._usermanager.login_listener()
+            # Step 4.3: Connect to a user manager if there is one
+            if self.usermanager:
+                self.usermanager.login_listener()
+            # Step 4.4: Connect to auth handler in user code
             return f(*args, **kw)
-        self._authhandler = f
         self._redirect_uri_name = f.__name__
         return decorated_function
 
@@ -195,10 +234,10 @@ class LastUser(object):
         @wraps(f)
         def decorated_function(error, error_description=None, error_uri=None):
             return f(error, error_description, error_uri)
-        self._autherrorhandler = f
+        self._auth_error_handler = f
         return decorated_function
 
-    def service_handler(self, f):
+    def notification_handler(self, f):
         """
         Handler for service requests from LastUser, used to notify of new
         resource access tokens and user info changes.
@@ -206,91 +245,4 @@ class LastUser(object):
         @wraps(f)
         def decorated_function(*args, **kw):
             return f(*args, **kw)
-        self._servicehandler = f
         return decorated_function
-
-
-# OAuth2 Client2 class adapted from https://github.com/OfflineLabs/python-oauth2/
-# We use our own copy since there's no standard Python OAuth2 implementation
-class Client2(object):
-    """Client for OAuth 2.0 draft spec
-    https://svn.tools.ietf.org/html/draft-hammer-oauth2-00
-    """
-
-    def __init__(self, client_id, client_secret, oauth_base_url,
-        redirect_uri=None, cache=None, timeout=None, proxy_info=None):
-
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.redirect_uri = redirect_uri
-        self.oauth_base_url = oauth_base_url
-
-        if self.client_id is None or self.client_secret is None or \
-           self.oauth_base_url is None:
-            raise ValueError("Client_id and client_secret must be set.")
-
-        self.http = httplib2.Http(cache=cache, timeout=timeout,
-            proxy_info=proxy_info)
-
-    def authorization_url(self, redirect_uri=None, params=None, state=None,
-        immediate=None, endpoint='authorize'):
-        """Get the URL to redirect the user for client authorization
-        https://svn.tools.ietf.org/html/draft-hammer-oauth2-00#section-3.5.2.1
-        """
-
-        # prepare required args
-        args = {
-            'response_type': 'code',
-            'client_id': self.client_id,
-        }
-
-        # prepare optional args
-        redirect_uri = redirect_uri or self.redirect_uri
-        if redirect_uri is not None:
-            args['redirect_uri'] = redirect_uri
-        if state is not None:
-            args['state'] = state
-        if immediate is not None:
-            args['immediate'] = str(immediate).lower()
-
-        args.update(params or {})
-
-        return '%s?%s' % (urlparse.urljoin(self.oauth_base_url, endpoint),
-            urllib.urlencode(args))
-
-    def access_token(self, code, redirect_uri, grant_type=None,
-        endpoint='access_token', params=None):
-        """Get an access token from the supplied code
-        https://svn.tools.ietf.org/html/draft-hammer-oauth2-00#section-3.5.2.2
-        """
-
-        # prepare required args
-        if code is None:
-            raise ValueError("Code must be set.")
-        if redirect_uri is None:
-            raise ValueError("Redirect_uri must be set.")
-        args = {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'code': code,
-            'redirect_uri': redirect_uri,
-        }
-
-        # prepare optional args
-        if grant_type is not None:
-            args['grant_type'] = grant_type
-
-        args.update(params or {})
-
-        uri = urlparse.urljoin(self.oauth_base_url, endpoint)
-        #uri = '%s?%s' % (uri, urllib.urlencode(args))
-
-        response, content = self.http.request(uri, "POST",
-            headers = {'Content-type': 'application/x-www-form-urlencoded'},
-            body = urllib.urlencode(args))
-
-        # TODO: Do something intelligent if there's an error (response['status'] != 200)
-        response_args = json.loads(content)
-
-        return response_args
-
