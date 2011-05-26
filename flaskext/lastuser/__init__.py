@@ -173,6 +173,7 @@ class LastUser(object):
             state = request.args.get('state')
             if state is None or state != session.get('lastuser_state'):
                 return self._auth_error_handler(error='csrf_invalid')
+            session.pop('lastuser_state', None)
             # Validation 3: Check if request for auth code was successful
             if 'error' in request.args:
                 return self._auth_error_handler(
@@ -201,6 +202,9 @@ class LastUser(object):
                 )
 
             result = json.loads(http_content)
+
+            # Step 2.1: Remove temporary session variables
+            session.pop('lastuser_redirect_uri', None)
 
             # Step 3: Check if auth token was refused
             if 'error' in result:
