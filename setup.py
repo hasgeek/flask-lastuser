@@ -24,7 +24,7 @@ setup(
     author_email='kiran@hasgeek.in',
     description='Flask extension for LastUser',
     long_description=__doc__,
-    packages=['flaskext'],
+    packages=['flaskext.lastuser'],
     namespace_packages=['flaskext'],
     zip_safe=False,
     platforms='any',
