@@ -16,7 +16,7 @@ from setuptools import setup
 
 
 setup(
-    name='flask-lastuser',
+    name='Flask-LastUser',
     version='0.2',
     url='https://github.com/hasgeek/flask-lastuser',
     license='BSD',
@@ -24,7 +24,8 @@ setup(
     author_email='kiran@hasgeek.in',
     description='Flask extension for LastUser',
     long_description=__doc__,
-    packages=['flaskext.lastuser'],
+    packages=['flaskext',
+              'flaskext.lastuser'],
     namespace_packages=['flaskext'],
     zip_safe=False,
     platforms='any',
