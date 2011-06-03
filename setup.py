@@ -17,7 +17,7 @@ from setuptools import setup
 
 setup(
     name='flask-lastuser',
-    version='0.1',
+    version='0.2',
     url='https://github.com/hasgeek/flask-lastuser',
     license='BSD',
     author='Kiran Jonnalagadda',

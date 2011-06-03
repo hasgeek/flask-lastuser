@@ -53,6 +53,8 @@ class UserManager(object):
                     if not hasattr(user, attr):
                         setattr(user, attr, getattr(g.lastuserinfo, attr))
             g.user = user
+        else:
+            g.user = None
 
     def login_listener(self):
         self.before_request()
