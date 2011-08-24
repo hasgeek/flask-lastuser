@@ -26,8 +26,12 @@ class UserBase(object):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     userid = Column(String(22), unique=True, nullable=False)
     username = Column(Unicode(80), unique=True, nullable=True) # Usernames are optional
-    fullname = Column(Unicode(80), default='', nullable=False)
+    fullname = Column(Unicode(80), default=u'', nullable=False)
     email = Column(Unicode(80), unique=True, nullable=True) # We may not get an email address
+    # Access token info
+    lastuser_token = Column(String(22), nullable=True, unique=True)
+    lastuser_token_type = Column(Unicode(250), nullable=True)
+    lastuser_token_scope = Column(Unicode(250), nullable=True)
 
 
 class UserManager(object):
@@ -61,6 +65,11 @@ class UserManager(object):
         # Username, fullname and email may have changed, so set them again
         # If the user model does not have these fields, they will not persist beyond one request
         # If we do set these, they won't be saved unless the transaction is committed
+        if g.lastuser_token:
+            g.user.lastuser_token = g.lastuser_token['access_token']
+            g.user.lastuser_token_type = g.lastuser_token['token_type']
+            g.user.lastuser_token_scope = g.lastuser_token['scope']
+
         if g.lastuserinfo:
             g.user.username = g.lastuserinfo.username
             g.user.fullname = g.lastuserinfo.fullname

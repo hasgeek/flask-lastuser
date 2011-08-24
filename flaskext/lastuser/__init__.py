@@ -217,16 +217,22 @@ class LastUser(object):
             if 'messages' in result:
                 for item in result['messages']:
                     flash(item['message'], item['category'])
-            # Step 4.2: Save user info received
+            # Step 4.2: Save token info
+            g.lastuser_token = {
+                'access_token': result.get('access_token'),
+                'token_type': result.get('token_type'),
+                'scope': result.get('scope'),
+                }
+            # Step 4.3: Save user info received
             userinfo = result.get('userinfo')
             session['lastuser_userinfo'] = userinfo
             if userinfo is not None:
                 g.lastuserinfo = UserInfo(userinfo.get('userid'), userinfo.get('username'),
                     userinfo.get('fullname'), userinfo.get('email'))
-            # Step 4.3: Connect to a user manager if there is one
+            # Step 4.4: Connect to a user manager if there is one
             if self.usermanager:
                 self.usermanager.login_listener()
-            # Step 4.4: Connect to auth handler in user code
+            # Step 4.5: Connect to auth handler in user code
             return f(*args, **kw)
         self._redirect_uri_name = f.__name__
         return decorated_function
