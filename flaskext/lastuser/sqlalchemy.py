@@ -33,6 +33,9 @@ class UserBase(object):
     lastuser_token_type = Column(Unicode(250), nullable=True)
     lastuser_token_scope = Column(Unicode(250), nullable=True)
 
+    def __repr__(self):
+        return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
+
 
 class UserManager(object):
     """
