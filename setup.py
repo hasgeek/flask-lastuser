@@ -17,16 +17,14 @@ from setuptools import setup
 
 setup(
     name='Flask-LastUser',
-    version='0.2',
+    version='0.3',
     url='https://github.com/hasgeek/flask-lastuser',
     license='BSD',
     author='Kiran Jonnalagadda',
     author_email='kiran@hasgeek.in',
     description='Flask extension for LastUser',
     long_description=__doc__,
-    packages=['flaskext',
-              'flaskext.lastuser'],
-    namespace_packages=['flaskext'],
+    packages=['flask_lastuser'],
     zip_safe=False,
     platforms='any',
     install_requires=[
