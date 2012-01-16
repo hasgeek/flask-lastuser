@@ -13,7 +13,7 @@ from __future__ import absolute_import
 __all__ = ['User', 'UserManager']
 
 from flask import g
-from mongoengine import Document, DateTimeField, StringField
+from mongoengine import Document, DateTimeField, StringField, signals
 from datetime import datetime
 
 
@@ -21,7 +21,6 @@ class User(Document):
     """
     Base class for user definition.
     """
-    created_at = DateTimeField(default=datetime.now, required=True)
     userid = StringField(max_length=22, unique=True, required=True)
     # Usernames are optional
     username = StringField(max_length=80, unique=True, required=False)
@@ -33,9 +32,18 @@ class User(Document):
     lastuser_token_type = StringField(max_length=250)
     lastuser_token_scope = StringField(max_length=250)
 
+    created_at = DateTimeField(default=datetime.now, required=True)
+    updated_at = DateTimeField(required=True)
+
     def __repr__(self):
         return ('<User %s (%s) "%s">' %
             (self.userid, self.username, self.fullname))
+    
+    @classmethod
+    def pre_save(cls, sender, document, **kwargs):
+        document.updated_at = datetime.now()
+
+signals.pre_save.connect(User.pre_save, sender=User)
 
 
 class UserManager(object):
