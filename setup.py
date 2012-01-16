@@ -30,6 +30,7 @@ setup(
     install_requires=[
         'Flask',
         'httplib2',
+        'blinker',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
