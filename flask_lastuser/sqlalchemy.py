@@ -5,7 +5,7 @@
 
     SQLAlchemy extensions for flask-lastuser.
 
-    :copyright: (c) 2011 by HasGeek Media LLP.
+    :copyright: (c) 2011-12 by HasGeek Media LLP.
     :license: BSD, see LICENSE for more details.
 """
 from __future__ import absolute_import

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
     flaskext.lastuser.mongoengine
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     mongoengine extensions for flask-lastuser.
 
@@ -88,4 +88,4 @@ class UserManager(object):
             g.user.username = g.lastuserinfo.username
             g.user.fullname = g.lastuserinfo.fullname
             g.user.email = g.lastuserinfo.email or None
-        self.user.save()
+        g.user.save()

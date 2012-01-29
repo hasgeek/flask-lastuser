@@ -5,7 +5,7 @@
 
     Flask extension for LastUser
 
-    :copyright: (c) 2011 by HasGeek Media LLP.
+    :copyright: (c) 2011-12 by HasGeek Media LLP.
     :license: BSD, see LICENSE for more details.
 """
 
@@ -16,14 +16,23 @@ import uuid
 import urlparse
 import httplib2
 import urllib
+import re
 
-from flask import session, g, redirect, url_for, request, json, flash, abort
+from flask import session, g, redirect, url_for, request, json, flash, abort, Response
+
+# Bearer token, as per http://tools.ietf.org/html/draft-ietf-oauth-v2-bearer-15#section-2.1
+auth_bearer_re = re.compile("^Bearer ([a-zA-Z0-9_.~+/-]+=*)$")
 
 
 class LastUserConfigException(Exception):
     pass
 
+
 class LastUserException(Exception):
+    pass
+
+
+class LastUserResourceException(LastUserException):
     pass
 
 
@@ -61,6 +70,8 @@ class LastUser(object):
         self.client_id = None
         self.client_secret = None
 
+        self.external_resources = {}
+
         if app is not None:
             self.init_app(app)
 
@@ -70,6 +81,7 @@ class LastUser(object):
         self.auth_endpoint = app.config.get('LASTUSER_ENDPOINT_AUTH', 'auth')
         self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
         self.logout_endpoint = app.config.get('LASTUSER_ENDPOINT_LOGOUT', 'logout')
+        self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
 
@@ -189,11 +201,10 @@ class LastUser(object):
             # Step 2: Get the auth token
             http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
             http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
-                "POST",
-                headers = {'Content-type': 'application/x-www-form-urlencoded',
-                           'Authorization': "Basic %s" % b64encode("%s:%s" % (self.client_id, self.client_secret))},
+                'POST',
+                headers = {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                           'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
                 body = urllib.urlencode({
-                    'client_id': self.client_id,
                     'code': code,
                     'redirect_uri': session.get('lastuser_redirect_uri'),
                     'grant_type': 'authorization_code',
@@ -256,3 +267,106 @@ class LastUser(object):
         def decorated_function(*args, **kw):
             return f(*args, **kw)
         return decorated_function
+
+    def resource_handler(self, resource_name):
+        """
+        Decorator for resource handlers. Verifies tokens and passes info on
+        the user and calling client.
+        """
+        def resource_auth_error(message):
+            return Response(message, 401,
+                {'WWW-Authenticate': 'Bearer realm="Token Required" scope="%s"' % name})
+
+        def wrapper(f):
+            @wraps(f)
+            def decorated_function(*args, **kw):
+                if 'Authorization' in request.headers:
+                    token_match = auth_bearer_re.search(request.headers['Authorization'])
+                    if token_match:
+                        token = token_match.group(1)
+                    else:
+                        # Unrecognized Authorization header
+                        return resource_auth_error(u"A Bearer token is required in the Authorization header.")
+                    if 'access_token' in args:
+                        return resource_auth_error(u"Access token specified in both header and body.")
+                else:
+                    # We only accept access_token in the form, not in the query.
+                    token = request.form.get('access_token')
+                    if not token:
+                        # No token provided in Authorization header or in request parameters
+                        return resource_auth_error(u"An access token is required to access this resource.")
+
+                # Check this token with LastUser's verify_token endpoint
+                http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
+                http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server,
+                    self.tokenverify_endpoint), 'POST',
+                    headers = {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                               'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
+                    body = urllib.urlencode({
+                        'resource': resource_name,
+                        'access_token': token,
+                        })
+                    )
+
+                if http_response.status in (400, 500, 401):
+                    return Response(u"Failed to verify token. LastUser returned status %d." % http_response.status,
+                        500)
+                elif http_response.status == 200:
+                    result = json.loads(http_content)
+                    # result should be cached temporarily. Maybe in memcache?
+                    if result['status'] == 'error':
+                        return Response(u"Invalid token.", 403)
+                    elif result['status'] == 'ok':
+                        # All okay. 
+                        return f(result, *args, **kw)
+
+    def external_resource(self, name, endpoint, method):
+        """
+        Register an external resource.
+        """
+        if method not in ['GET', 'PUT', 'POST', 'DELETE']:
+            raise LastUserException("Unknown HTTP method '%s'" % method)
+        self.external_resources[name] = {'endpoint': endpoint, 'method': method}
+
+    def call_resource(self, name, **kw):
+        """
+        Call an external resource.
+        """
+        resource_details = self.external_resources[name]
+        endpoint = resource_details['endpoint']
+
+        http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
+        # XXX: We assume a user object that provides attribute access
+        if g.user.lastuser_token_type != 'bearer':
+            raise LastUserResourceException("Unsupported token type.")
+        headers = {'Authorization': 'Bearer %s' % g.user.lastuser_token}
+
+        if resource_details['method'] == 'GET':
+            # Encode body into the query
+            urlparts = list(urlparse.urlsplit(endpoint))
+            # URL parts:
+            # 0: scheme
+            # 1: netloc
+            # 2: path
+            # 3: query -- appended to
+            # 4: fragment
+            queryparts = urlparse.parse_qsl(urlparts[3], keep_blank_values=True)
+            queryparts.extend(kw.items())
+            urlparts[3] = urllib.urlencode(queryparts)
+            endpoint = urlparse.urlunsplit(urlparts)
+            http_response, http_content = http.request(endpoint, resource_details['method'],
+                headers=headers)
+        else:
+            body = urllib.urlencode(kw)
+            headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=UTF-8'
+            http_response, http_content = http.request(endpoint, resource_details['method'],
+                headers=headers, body=body)
+        # Parse the result
+        if http_response.status != 200:
+            # XXX: What other status codes could we possibly get from a REST call?
+            raise LastUserResourceException("Resource return status %d." % http_response.status)
+        if http_response.get('content-type') in ['text/json', 'application/json']:
+            result = json.loads(http_content)
+        else:
+            result = http_content
+        return result
