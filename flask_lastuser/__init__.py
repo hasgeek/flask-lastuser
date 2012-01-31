@@ -367,7 +367,7 @@ class LastUser(object):
         # Parse the result
         if http_response.status != 200:
             # XXX: What other status codes could we possibly get from a REST call?
-            raise LastUserResourceException("Resource return status %d." % http_response.status)
+            raise LastUserResourceException("Resource returned status %d." % http_response.status)
         if http_response.get('content-type') in ['text/json', 'application/json']:
             result = json.loads(http_content)
         else:

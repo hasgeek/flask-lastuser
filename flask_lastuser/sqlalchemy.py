@@ -67,13 +67,15 @@ class UserManager(object):
         self.before_request()
         # Username, fullname and email may have changed, so set them again
         # If the user model does not have these fields, they will not persist beyond one request
-        # If we do set these, they won't be saved unless the transaction is committed
-        if g.lastuser_token:
-            g.user.lastuser_token = g.lastuser_token['access_token']
-            g.user.lastuser_token_type = g.lastuser_token['token_type']
-            g.user.lastuser_token_scope = g.lastuser_token['scope']
-
         if g.lastuserinfo:
             g.user.username = g.lastuserinfo.username
             g.user.fullname = g.lastuserinfo.fullname
             g.user.email = g.lastuserinfo.email or None
+        if g.lastuser_token:
+            g.user.lastuser_token = g.lastuser_token['access_token']
+            g.user.lastuser_token_type = g.lastuser_token['token_type']
+            g.user.lastuser_token_scope = g.lastuser_token['scope']
+        # Commit this so that token info is saved even if the user account is an existing account.
+        # This is called before the request is processed by the client app, so there should be no
+        # other data in the transaction
+        self.db.session.commit()
