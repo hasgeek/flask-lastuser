@@ -275,9 +275,9 @@ class LastUser(object):
         """
         def resource_auth_error(message):
             return Response(message, 401,
-                {'WWW-Authenticate': 'Bearer realm="Token Required" scope="%s"' % name})
+                {'WWW-Authenticate': 'Bearer realm="Token Required" scope="%s"' % resource_name})
 
-        def wrapper(f):
+        def inner(f):
             @wraps(f)
             def decorated_function(*args, **kw):
                 if 'Authorization' in request.headers:
@@ -317,8 +317,11 @@ class LastUser(object):
                     if result['status'] == 'error':
                         return Response(u"Invalid token.", 403)
                     elif result['status'] == 'ok':
-                        # All okay. 
+                        # All okay.
+                        # TODO: If the user is unknown, make a new user
                         return f(result, *args, **kw)
+            return decorated_function
+        return inner
 
     def external_resource(self, name, endpoint, method):
         """
