@@ -52,8 +52,7 @@ class UserManager(object):
     object from the database.
     """
 
-    def __init__(self, userobject, usermodel):
-        self.user = userobject
+    def __init__(self, usermodel):
         self.usermodel = usermodel
 
     def before_request(self):
