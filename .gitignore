@@ -10,3 +10,5 @@ test.db
 error.log
 *.egg-info
 .coverage
+build/
+dist/
