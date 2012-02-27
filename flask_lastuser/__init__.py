@@ -117,6 +117,18 @@ class LastUser(object):
             return f(*args, **kwargs)
         return decorated_function
 
+    def permissions(self):
+        """
+        Return all permissions available to user.
+        """
+        return g.lastuserinfo is not None and g.lastuserinfo.permissions or []
+
+    def has_permission(self, permission):
+        """
+        Returns True if the current user has the specified permission.
+        """
+        return permission in self.permissions()
+
     def requires_permission(self, permission):
         def inner(f):
             @wraps(f)
@@ -125,7 +137,7 @@ class LastUser(object):
                     if not self._login_handler:
                         abort(403)
                     return redirect(url_for(self._login_handler.__name__, next=request.url))
-                if permission not in g.lastuserinfo.permissions:
+                if not self.has_permission(permission):
                     abort(403)
                 return f(*args, **kwargs)
             return decorated_function
