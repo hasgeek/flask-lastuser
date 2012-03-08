@@ -12,7 +12,7 @@ from __future__ import absolute_import
 
 __all__ = ['UserBase', 'UserManager']
 
-from flask import g, session
+from flask import g
 from sqlalchemy import func, Column, Integer, String, DateTime, Unicode
 
 
@@ -25,9 +25,9 @@ class UserBase(object):
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     userid = Column(String(22), unique=True, nullable=False)
-    username = Column(Unicode(80), unique=True, nullable=True) # Usernames are optional
+    username = Column(Unicode(80), unique=True, nullable=True)  # Usernames are optional
     fullname = Column(Unicode(80), default=u'', nullable=False)
-    email = Column(Unicode(80), unique=True, nullable=True) # We may not get an email address
+    email = Column(Unicode(80), unique=True, nullable=True)  # We may not get an email address
     # Access token info
     lastuser_token = Column(String(22), nullable=True, unique=True)
     lastuser_token_type = Column(Unicode(250), nullable=True)
@@ -68,6 +68,19 @@ class UserManager(object):
         # Username, fullname and email may have changed, so set them again
         # If the user model does not have these fields, they will not persist beyond one request
         if g.lastuserinfo:
+            # Watch for username/email conflicts. Remove from any existing user
+            # that have the same username or email, for a conflict can only mean
+            # that we didn't hear of this change when it happened in LastUser
+            olduser = self.usermodel.query.filter_by(username=g.lastuserinfo.username).first()
+            if olduser is not None and olduser.id != g.user.id:
+                print "Olduser matches username"
+                olduser.username = None
+            olduser = self.usermodel.query.filter_by(email=g.lastuserinfo.email).first()
+            if olduser is not None and olduser.id != g.user.id:
+                print "Olduser matches email"
+                olduser.email = None
+            self.db.session.commit()
+
             g.user.username = g.lastuserinfo.username
             g.user.fullname = g.lastuserinfo.fullname
             g.user.email = g.lastuserinfo.email or None

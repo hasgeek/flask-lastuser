@@ -93,11 +93,11 @@ class LastUser(object):
     def before_request(self):
         info = session.get('lastuser_userinfo')
         if info is not None:
-            userinfo = UserInfo(userid = info.get('userid'),
-                                username = info.get('username'),
-                                fullname = info.get('fullname'),
-                                email = info.get('email'),
-                                permissions = info.get('permissions', ()))
+            userinfo = UserInfo(userid=info.get('userid'),
+                                username=info.get('username'),
+                                fullname=info.get('fullname'),
+                                email=info.get('email'),
+                                permissions=info.get('permissions', ()))
             g.lastuserinfo = userinfo
         else:
             g.lastuserinfo = None
@@ -156,7 +156,8 @@ class LastUser(object):
             session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
                     next=request.args.get('next') or request.referrer or None,
                     _external=True)
-
+            # Discard currently logged in user
+            session.pop('lastuser_userinfo', None)
             return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
                 urllib.urlencode({
                     'response_type': 'code',
@@ -201,9 +202,9 @@ class LastUser(object):
             # Validation 3: Check if request for auth code was successful
             if 'error' in request.args:
                 return self._auth_error_handler(
-                    error = request.args['error'],
-                    error_description = request.args.get('error_description'),
-                    error_uri = request.args.get('error_uri'))
+                    error=request.args['error'],
+                    error_description=request.args.get('error_description'),
+                    error_uri=request.args.get('error_uri'))
             # Validation 4: Check if we got an auth code
             code = request.args.get('code')
             if not code:
@@ -214,9 +215,9 @@ class LastUser(object):
             http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
             http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
                 'POST',
-                headers = {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                           'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
-                body = urllib.urlencode({
+                headers={'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                         'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
+                body=urllib.urlencode({
                     'code': code,
                     'redirect_uri': session.get('lastuser_redirect_uri'),
                     'grant_type': 'authorization_code',
@@ -232,9 +233,9 @@ class LastUser(object):
             # Step 3: Check if auth token was refused
             if 'error' in result:
                 return self._auth_error_handler(
-                    error = result['error'],
-                    error_description = result.get('error_description'),
-                    error_uri = result.get('error_uri'))
+                    error=result['error'],
+                    error_description=result.get('error_description'),
+                    error_uri=result.get('error_uri'))
 
             # Step 4.1: All good. Relay any messages we received
             if 'messages' in result:
@@ -312,9 +313,9 @@ class LastUser(object):
                 http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
                 http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server,
                     self.tokenverify_endpoint), 'POST',
-                    headers = {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                               'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
-                    body = urllib.urlencode({
+                    headers={'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                             'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
+                    body=urllib.urlencode({
                         'resource': resource_name,
                         'access_token': token,
                         })
