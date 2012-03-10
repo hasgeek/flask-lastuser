@@ -73,11 +73,9 @@ class UserManager(object):
             # that we didn't hear of this change when it happened in LastUser
             olduser = self.usermodel.query.filter_by(username=g.lastuserinfo.username).first()
             if olduser is not None and olduser.id != g.user.id:
-                print "Olduser matches username"
                 olduser.username = None
             olduser = self.usermodel.query.filter_by(email=g.lastuserinfo.email).first()
             if olduser is not None and olduser.id != g.user.id:
-                print "Olduser matches email"
                 olduser.email = None
             self.db.session.commit()
 
