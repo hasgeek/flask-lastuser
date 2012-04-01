@@ -44,12 +44,13 @@ class UserInfo(object):
     """
     User info object that is inserted into the context variable container.
     """
-    def __init__(self, userid, username, fullname, email=None, permissions=()):
+    def __init__(self, userid, username, fullname, email=None, permissions=(), organizations=None):
         self.userid = userid
         self.username = username
         self.fullname = fullname
         self.email = email
         self.permissions = permissions
+        self.organizations = organizations
 
 
 class LastUser(object):
@@ -97,7 +98,8 @@ class LastUser(object):
                                 username=info.get('username'),
                                 fullname=info.get('fullname'),
                                 email=info.get('email'),
-                                permissions=info.get('permissions', ()))
+                                permissions=info.get('permissions', ()),
+                                organizations=info.get('organizations'))
             g.lastuserinfo = userinfo
         else:
             g.lastuserinfo = None
@@ -251,8 +253,13 @@ class LastUser(object):
             userinfo = result.get('userinfo')
             session['lastuser_userinfo'] = userinfo
             if userinfo is not None:
-                g.lastuserinfo = UserInfo(userinfo.get('userid'), userinfo.get('username'),
-                    userinfo.get('fullname'), userinfo.get('email'))
+                g.lastuserinfo = UserInfo(userid=userinfo.get('userid'),
+                                          username=userinfo.get('username'),
+                                          fullname=userinfo.get('fullname'),
+                                          email=userinfo.get('email'),
+                                          permissions=userinfo.get('permissions', ()),
+                                          organizations=userinfo.get('organizations'))
+
             # Step 4.4: Connect to a user manager if there is one
             if self.usermanager:
                 self.usermanager.login_listener()
