@@ -12,8 +12,10 @@ from __future__ import absolute_import
 
 __all__ = ['UserBase', 'UserManager']
 
-from flask import g
-from sqlalchemy import func, Column, Integer, String, DateTime, Unicode
+import urlparse
+from flask import g, current_app, json, session
+from sqlalchemy import func, Column, Integer, String, DateTime, Unicode, UnicodeText
+from flask.ext.lastuser import UserInfo
 
 
 class UserBase(object):
@@ -32,9 +34,43 @@ class UserBase(object):
     lastuser_token = Column(String(22), nullable=True, unique=True)
     lastuser_token_type = Column(Unicode(250), nullable=True)
     lastuser_token_scope = Column(Unicode(250), nullable=True)
+    # Userinfo
+    _userinfo = Column('userinfo', UnicodeText, nullable=True)
+
+    @property
+    def userinfo(self):
+        if not hasattr(self, '_userinfo_cached'):
+            if not self._userinfo:
+                self._userinfo_cached = {}
+            else:
+                self._userinfo_cached = json.loads(self._userinfo)
+        return self._userinfo_cached
+
+    @userinfo.setter
+    def userinfo(self, value):
+        if not isinstance(value, dict):
+            raise ValueError("userinfo must be a dict")
+        self._userinfo_cached = value
+        self._userinfo = json.dumps(value)
 
     def __repr__(self):
         return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
+
+    def organizations_owned(self):
+        if self.userinfo.get('organizations') and 'owner' in self.userinfo['organizations']:
+            return list(self.userinfo['organizations']['owner'])
+        else:
+            return []
+
+    def organizations_owned_ids(self):
+        return [org['userid'] for org in self.organizations_owned()]
+
+    def user_organization_ids(self):
+        return [self.userid] + self.organizations_owned_ids()
+
+    @property
+    def profile_url(self):
+        return urlparse.urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
 
 
 class UserManager(object):
@@ -46,46 +82,45 @@ class UserManager(object):
         self.usermodel = usermodel
 
     def before_request(self):
-        # TODO: How do we cache this? Connect to a cache manager
-        if g.lastuserinfo:
-            user = self.usermodel.query.filter_by(userid=g.lastuserinfo.userid).first()
+        if session.get('lastuser_userid'):
+            # TODO: How do we cache this? Connect to a cache manager
+            user = self.usermodel.query.filter_by(userid=session['lastuser_userid']).first()
             if user is None:
-                user = self.usermodel(userid=g.lastuserinfo.userid)
-                user.username = g.lastuserinfo.username
-                user.fullname = g.lastuserinfo.fullname
-                user.email = g.lastuserinfo.email or None
+                user = self.usermodel(userid=session['lastuser_userid'])
                 self.db.session.add(user)
-            else:
-                for attr in ['username', 'fullname', 'email']:
-                    if not hasattr(user, attr):
-                        setattr(user, attr, getattr(g.lastuserinfo, attr))
             g.user = user
+            g.lastuserinfo = UserInfo(userid=user.userid,
+                                      username=user.username,
+                                      fullname=user.fullname,
+                                      email=user.email,
+                                      permissions=user.userinfo.get('permissions', ()),
+                                      organizations=user.userinfo.get('organizations'))
         else:
             g.user = None
+            g.lastuserinfo = None
 
-    def login_listener(self):
+    def login_listener(self, userinfo, token):
         self.before_request()
+        user = g.user
         # Username, fullname and email may have changed, so set them again
-        # If the user model does not have these fields, they will not persist beyond one request
-        if g.lastuserinfo:
-            # Watch for username/email conflicts. Remove from any existing user
-            # that have the same username or email, for a conflict can only mean
-            # that we didn't hear of this change when it happened in LastUser
-            olduser = self.usermodel.query.filter_by(username=g.lastuserinfo.username).first()
-            if olduser is not None and olduser.id != g.user.id:
-                olduser.username = None
-            olduser = self.usermodel.query.filter_by(email=g.lastuserinfo.email).first()
-            if olduser is not None and olduser.id != g.user.id:
-                olduser.email = None
-            self.db.session.commit()
+        user.username = userinfo['username']
+        user.fullname = userinfo['fullname']
+        user.email = userinfo.get('email')
+        user.userinfo = userinfo
 
-            g.user.username = g.lastuserinfo.username
-            g.user.fullname = g.lastuserinfo.fullname
-            g.user.email = g.lastuserinfo.email or None
-        if g.lastuser_token:
-            g.user.lastuser_token = g.lastuser_token['access_token']
-            g.user.lastuser_token_type = g.lastuser_token['token_type']
-            g.user.lastuser_token_scope = g.lastuser_token['scope']
+        # Watch for username/email conflicts. Remove from any existing user
+        # that have the same username or email, for a conflict can only mean
+        # that we didn't hear of this change when it happened in LastUser
+        olduser = self.usermodel.query.filter_by(username=user.username).first()
+        if olduser is not None and olduser.id != user.id:
+            olduser.username = None
+        olduser = self.usermodel.query.filter_by(email=user.email).first()
+        if olduser is not None and olduser.id != user.id:
+            olduser.email = None
+
+        user.lastuser_token = token['access_token']
+        user.lastuser_token_type = token['token_type']
+        user.lastuser_token_scope = token['scope']
         # Commit this so that token info is saved even if the user account is an existing account.
         # This is called before the request is processed by the client app, so there should be no
         # other data in the transaction

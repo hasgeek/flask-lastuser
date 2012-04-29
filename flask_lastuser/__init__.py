@@ -42,7 +42,7 @@ def randomstring():
 
 class UserInfo(object):
     """
-    User info object that is inserted into the context variable container.
+    User info object that is inserted into the context variable container (flask.g)
     """
     def __init__(self, userid, username, fullname, email=None, permissions=(), organizations=None):
         self.userid = userid
@@ -92,17 +92,6 @@ class LastUser(object):
         self.usermanager = um
 
     def before_request(self):
-        info = session.get('lastuser_userinfo')
-        if info is not None:
-            userinfo = UserInfo(userid=info.get('userid'),
-                                username=info.get('username'),
-                                fullname=info.get('fullname'),
-                                email=info.get('email'),
-                                permissions=info.get('permissions', ()),
-                                organizations=info.get('organizations'))
-            g.lastuserinfo = userinfo
-        else:
-            g.lastuserinfo = None
         if self.usermanager:
             self.usermanager.before_request()
 
@@ -159,7 +148,7 @@ class LastUser(object):
                     next=request.args.get('next') or request.referrer or None,
                     _external=True)
             # Discard currently logged in user
-            session.pop('lastuser_userinfo', None)
+            session.pop('lastuser_userid', None)
             return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
                 urllib.urlencode({
                     'response_type': 'code',
@@ -179,7 +168,7 @@ class LastUser(object):
         def decorated_function(*args, **kwargs):
             next = f(*args, **kwargs)
             g.lastuserinfo = None
-            session.pop('lastuser_userinfo', None)
+            session.pop('lastuser_userid', None)
             if not (next.startswith('http:') or next.startswith('https:')):
                 next = urlparse.urljoin(request.url_root, next)
             return redirect(urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
@@ -244,25 +233,17 @@ class LastUser(object):
                 for item in result['messages']:
                     flash(item['message'], item['category'])
             # Step 4.2: Save token info
-            g.lastuser_token = {
+            token = {
                 'access_token': result.get('access_token'),
                 'token_type': result.get('token_type'),
                 'scope': result.get('scope'),
                 }
             # Step 4.3: Save user info received
             userinfo = result.get('userinfo')
-            session['lastuser_userinfo'] = userinfo
-            if userinfo is not None:
-                g.lastuserinfo = UserInfo(userid=userinfo.get('userid'),
-                                          username=userinfo.get('username'),
-                                          fullname=userinfo.get('fullname'),
-                                          email=userinfo.get('email'),
-                                          permissions=userinfo.get('permissions', ()),
-                                          organizations=userinfo.get('organizations'))
-
+            session['lastuser_userid'] = userinfo['userid']
             # Step 4.4: Connect to a user manager if there is one
             if self.usermanager:
-                self.usermanager.login_listener()
+                self.usermanager.login_listener(userinfo, token)
             # Step 4.5: Connect to auth handler in user code
             return f(*args, **kw)
         self._redirect_uri_name = f.__name__
