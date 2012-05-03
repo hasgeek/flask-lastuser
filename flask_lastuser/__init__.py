@@ -104,7 +104,8 @@ class LastUser(object):
             if g.lastuserinfo is None:
                 if not self._login_handler:
                     abort(403)
-                return redirect(url_for(self._login_handler.__name__, next=request.url))
+                return redirect(url_for(self._login_handler.__name__,
+                    next=url_for(request.endpoint, **request.view_args)))
             return f(*args, **kwargs)
         return decorated_function
 
@@ -127,7 +128,8 @@ class LastUser(object):
                 if g.lastuserinfo is None:
                     if not self._login_handler:
                         abort(403)
-                    return redirect(url_for(self._login_handler.__name__, next=request.url))
+                    return redirect(url_for(self._login_handler.__name__,
+                        next=url_for(request.endpoint, **request.view_args)))
                 if not self.has_permission(permission):
                     abort(403)
                 return f(*args, **kwargs)
