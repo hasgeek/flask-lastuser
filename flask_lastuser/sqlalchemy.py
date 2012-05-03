@@ -15,6 +15,8 @@ __all__ = ['UserBase', 'UserManager']
 import urlparse
 from flask import g, current_app, json, session
 from sqlalchemy import func, Column, Integer, String, DateTime, Unicode, UnicodeText
+from sqlalchemy.orm import deferred, undefer
+from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo
 
 
@@ -34,8 +36,11 @@ class UserBase(object):
     lastuser_token = Column(String(22), nullable=True, unique=True)
     lastuser_token_type = Column(Unicode(250), nullable=True)
     lastuser_token_scope = Column(Unicode(250), nullable=True)
+
     # Userinfo
-    _userinfo = Column('userinfo', UnicodeText, nullable=True)
+    @declared_attr
+    def _userinfo(cls):
+        return deferred(Column('userinfo', UnicodeText, nullable=True))
 
     @property
     def userinfo(self):
@@ -84,7 +89,8 @@ class UserManager(object):
     def before_request(self):
         if session.get('lastuser_userid'):
             # TODO: How do we cache this? Connect to a cache manager
-            user = self.usermodel.query.filter_by(userid=session['lastuser_userid']).first()
+            user = self.usermodel.query.filter_by(userid=session['lastuser_userid']
+                ).options(undefer('_userinfo')).first()
             if user is None:
                 user = self.usermodel(userid=session['lastuser_userid'])
                 self.db.session.add(user)
