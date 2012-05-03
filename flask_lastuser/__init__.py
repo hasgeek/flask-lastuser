@@ -83,6 +83,8 @@ class LastUser(object):
         self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
         self.logout_endpoint = app.config.get('LASTUSER_ENDPOINT_LOGOUT', 'logout')
         self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
+        self.getuser_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
+        self.getuser_userid_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
 
@@ -271,6 +273,18 @@ class LastUser(object):
             return f(*args, **kw)
         return decorated_function
 
+    def _lastuser_api_call(self, endpoint, **kwargs):
+        # Check this token with LastUser's verify_token endpoint
+        http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
+        http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server, endpoint), 'POST',
+            headers={'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                     'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
+            body=urllib.urlencode(kwargs))
+        if http_response.status in (400, 500, 401):
+            abort(500)
+        elif http_response.status == 200:
+            return json.loads(http_content)
+
     def resource_handler(self, resource_name):
         """
         Decorator for resource handlers. Verifies tokens and passes info on
@@ -299,32 +313,32 @@ class LastUser(object):
                         # No token provided in Authorization header or in request parameters
                         return resource_auth_error(u"An access token is required to access this resource.")
 
-                # Check this token with LastUser's verify_token endpoint
-                http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
-                http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server,
-                    self.tokenverify_endpoint), 'POST',
-                    headers={'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                             'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
-                    body=urllib.urlencode({
-                        'resource': resource_name,
-                        'access_token': token,
-                        })
-                    )
-
-                if http_response.status in (400, 500, 401):
-                    return Response(u"Failed to verify token. LastUser returned status %d." % http_response.status,
-                        500)
-                elif http_response.status == 200:
-                    result = json.loads(http_content)
-                    # result should be cached temporarily. Maybe in memcache?
-                    if result['status'] == 'error':
-                        return Response(u"Invalid token.", 403)
-                    elif result['status'] == 'ok':
-                        # All okay.
-                        # TODO: If the user is unknown, make a new user
-                        return f(result, *args, **kw)
+                result = self._lastuser_api_call(self.tokenverify_endpoint, resource=resource_name, access_token=token)
+                # result should be cached temporarily. Maybe in memcache?
+                if result['status'] == 'error':
+                    return Response(u"Invalid token.", 403)
+                elif result['status'] == 'ok':
+                    # All okay.
+                    # TODO: If the user is unknown, make a new user
+                    return f(result, *args, **kw)
             return decorated_function
         return inner
+
+    # TODO: Map to app user if present. Check with UserManager
+    def getuser(self, name):
+        result = self._lastuser_api_call(self.getuser_endpoint, name=name)
+        if 'error' in result:
+            return None
+        else:
+            return result
+
+    # TODO: Map to app user if present. Check with UserManager
+    def getuser_by_userid(self, userid):
+        result = self._lastuser_api_call(self.getuser_userid_endpoint, userid=userid)
+        if 'error' in result:
+            return None
+        else:
+            return result
 
     def external_resource(self, name, endpoint, method):
         """
