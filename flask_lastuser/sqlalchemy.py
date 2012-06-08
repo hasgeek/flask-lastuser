@@ -70,8 +70,20 @@ class UserBase(object):
     def organizations_owned_ids(self):
         return [org['userid'] for org in self.organizations_owned()]
 
-    def user_organization_ids(self):
+    def user_organization_owned_ids(self):
         return [self.userid] + self.organizations_owned_ids()
+
+    def organizations_memberof(self):
+        if self.userinfo.get('organizations') and 'member' in self.userinfo['organizations']:
+            return list(self.userinfo['organizations']['member'])
+        else:
+            return []
+
+    def organizations_memberof_ids(self):
+        return [org['userid'] for org in self.organizations_memberof()]
+
+    def user_organization_memberof_ids(self):
+        return [self.userid] + self.organizations_memberof_ids()
 
     @property
     def profile_url(self):
