@@ -123,7 +123,7 @@ class UserManager(object):
         # Username, fullname and email may have changed, so set them again
         user.username = userinfo['username']
         user.fullname = userinfo['fullname']
-        user.email = userinfo.get('email')
+        user.email = userinfo.get('email') or None
         user.userinfo = userinfo
 
         # Watch for username/email conflicts. Remove from any existing user
