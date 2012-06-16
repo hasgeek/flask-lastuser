@@ -13,8 +13,9 @@ from __future__ import absolute_import
 __all__ = ['UserBase', 'UserManager']
 
 import urlparse
+from datetime import datetime
 from flask import g, current_app, json, session
-from sqlalchemy import func, Column, Integer, String, DateTime, Unicode, UnicodeText
+from sqlalchemy import Column, Integer, String, DateTime, Unicode, UnicodeText
 from sqlalchemy.orm import deferred, undefer
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo
@@ -26,8 +27,8 @@ class UserBase(object):
     """
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     userid = Column(String(22), unique=True, nullable=False)
     username = Column(Unicode(80), unique=True, nullable=True)  # Usernames are optional
     fullname = Column(Unicode(80), default=u'', nullable=False)
