@@ -71,7 +71,7 @@ class UserBase(object):
     def organizations_owned_ids(self):
         return [org['userid'] for org in self.organizations_owned()]
 
-    def user_organization_owned_ids(self):
+    def user_organizations_owned_ids(self):
         return [self.userid] + self.organizations_owned_ids()
 
     def organizations_memberof(self):
@@ -89,6 +89,9 @@ class UserBase(object):
     @property
     def profile_url(self):
         return urlparse.urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
+
+    # NOTE: Compatibility definition, please do not use in new code
+    user_organization_owned_ids = user_organizations_owned_ids
 
 
 class UserManager(object):
