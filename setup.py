@@ -17,7 +17,7 @@ from setuptools import setup
 
 setup(
     name='Flask-Lastuser',
-    version='0.3.2',
+    version='0.3.2a',
     url='https://github.com/hasgeek/flask-lastuser',
     license='BSD',
     author='Kiran Jonnalagadda',
@@ -30,6 +30,7 @@ setup(
     install_requires=[
         'Flask',
         'httplib2',
+        'SQLAlchemy',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
