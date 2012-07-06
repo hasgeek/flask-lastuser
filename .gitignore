@@ -9,6 +9,7 @@ test.db
 .sass-cache
 error.log
 *.egg-info
+*.egg
 .coverage
 build/
 dist/
