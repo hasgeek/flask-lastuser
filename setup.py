@@ -27,10 +27,14 @@ setup(
     packages=['flask_lastuser'],
     zip_safe=False,
     platforms='any',
+    dependency_links = [
+        'https://github.com/hasgeek/coaster/zipball/master',
+    ],
     install_requires=[
         'Flask',
         'httplib2',
         'SQLAlchemy',
+        'coaster',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
