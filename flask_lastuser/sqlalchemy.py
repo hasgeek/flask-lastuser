@@ -19,16 +19,14 @@ from sqlalchemy import Column, Integer, String, DateTime, Unicode, UnicodeText
 from sqlalchemy.orm import deferred, undefer
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo
+from coaster.sqlalchemy import BaseMixin
 
 
-class UserBase(object):
+class UserBase(BaseMixin):
     """
     Base class for user definition.
     """
     __tablename__ = 'user'
-    id = Column(Integer, primary_key=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     userid = Column(String(22), unique=True, nullable=False)
     username = Column(Unicode(80), unique=True, nullable=True)  # Usernames are optional
     fullname = Column(Unicode(80), default=u'', nullable=False)
