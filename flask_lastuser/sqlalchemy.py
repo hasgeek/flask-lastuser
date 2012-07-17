@@ -13,9 +13,8 @@ from __future__ import absolute_import
 __all__ = ['UserBase', 'UserManager']
 
 import urlparse
-from datetime import datetime
 from flask import g, current_app, json, session
-from sqlalchemy import Column, Integer, String, DateTime, Unicode, UnicodeText
+from sqlalchemy import Column, String, Unicode, UnicodeText
 from sqlalchemy.orm import deferred, undefer
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo
