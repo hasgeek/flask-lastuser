@@ -28,7 +28,7 @@ setup(
     zip_safe=False,
     platforms='any',
     dependency_links = [
-        'https://github.com/hasgeek/coaster/zipball/master',
+        'https://github.com/hasgeek/coaster/zipball/master#egg=coaster',
     ],
     install_requires=[
         'Flask',
