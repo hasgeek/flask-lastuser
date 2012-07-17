@@ -17,7 +17,7 @@ from setuptools import setup
 
 setup(
     name='Flask-Lastuser',
-    version='0.3.2b',
+    version='0.3.3',
     url='https://github.com/hasgeek/flask-lastuser',
     license='BSD',
     author='Kiran Jonnalagadda',
@@ -27,7 +27,7 @@ setup(
     packages=['flask_lastuser'],
     zip_safe=False,
     platforms='any',
-    dependency_links = [
+    dependency_links=[
         'https://github.com/hasgeek/coaster/zipball/master#egg=coaster',
     ],
     install_requires=[
