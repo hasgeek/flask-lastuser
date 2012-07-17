@@ -129,7 +129,7 @@ class UserManager(object):
 
         # Watch for username/email conflicts. Remove from any existing user
         # that have the same username or email, for a conflict can only mean
-        # that we didn't hear of this change when it happened in LastUser
+        # that we didn't hear of this change when it happened in Lastuser
         olduser = self.usermodel.query.filter_by(username=user.username).first()
         if olduser is not None and olduser.id != user.id:
             olduser.username = None

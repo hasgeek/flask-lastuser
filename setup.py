@@ -2,7 +2,7 @@
 flask-lastuser
 --------------
 
-Flask extension for HasGeek's LastUser user management app
+Flask extension for HasGeek's Lastuser user management app
 
 Links
 `````
@@ -22,7 +22,7 @@ setup(
     license='BSD',
     author='Kiran Jonnalagadda',
     author_email='kiran@hasgeek.in',
-    description='Flask extension for LastUser',
+    description='Flask extension for Lastuser',
     long_description=__doc__,
     packages=['flask_lastuser'],
     zip_safe=False,

@@ -3,7 +3,7 @@
     flaskext.lastuser
     ~~~~~~~~~~~~~~~~~
 
-    Flask extension for LastUser
+    Flask extension for Lastuser
 
     :copyright: (c) 2011-12 by HasGeek Media LLP.
     :license: BSD, see LICENSE for more details.
@@ -24,15 +24,15 @@ from flask import session, g, redirect, url_for, request, json, flash, abort, Re
 auth_bearer_re = re.compile("^Bearer ([a-zA-Z0-9_.~+/-]+=*)$")
 
 
-class LastUserConfigException(Exception):
+class LastuserConfigException(Exception):
     pass
 
 
-class LastUserException(Exception):
+class LastuserException(Exception):
     pass
 
 
-class LastUserResourceException(LastUserException):
+class LastuserResourceException(LastuserException):
     pass
 
 
@@ -53,9 +53,9 @@ class UserInfo(object):
         self.organizations = organizations
 
 
-class LastUser(object):
+class Lastuser(object):
     """
-    Flask extension for LastUser
+    Flask extension for Lastuser
     """
     def __init__(self, app=None):
         self.app = app
@@ -157,7 +157,7 @@ class LastUser(object):
 
             data = f(*args, **kwargs)
             if not self._redirect_uri_name:
-                raise LastUserConfigException("No authorization handler defined")
+                raise LastuserConfigException("No authorization handler defined")
             session['lastuser_state'] = randomstring()
             session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
                     next=request.args.get('next') or request.referrer or None,
@@ -199,7 +199,7 @@ class LastUser(object):
             # Step 1: Validations
             # Validation 1: Check if there is an error handler
             if not self._auth_error_handler:
-                raise LastUserConfigException("No authorization error handler")
+                raise LastuserConfigException("No authorization error handler")
             # Validation 2: Check for CSRF attacks
             state = request.args.get('state')
             if state is None or state != session.get('lastuser_state'):
@@ -276,7 +276,7 @@ class LastUser(object):
 
     def notification_handler(self, f):
         """
-        Handler for service requests from LastUser, used to notify of new
+        Handler for service requests from Lastuser, used to notify of new
         resource access tokens and user info changes.
         """
         @wraps(f)
@@ -285,7 +285,7 @@ class LastUser(object):
         return decorated_function
 
     def _lastuser_api_call(self, endpoint, **kwargs):
-        # Check this token with LastUser's verify_token endpoint
+        # Check this token with Lastuser's verify_token endpoint
         http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
         http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server, endpoint), 'POST',
             headers={'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -356,7 +356,7 @@ class LastUser(object):
         Register an external resource.
         """
         if method not in ['GET', 'PUT', 'POST', 'DELETE']:
-            raise LastUserException("Unknown HTTP method '%s'" % method)
+            raise LastuserException("Unknown HTTP method '%s'" % method)
         self.external_resources[name] = {'endpoint': endpoint, 'method': method}
 
     def call_resource(self, name, **kw):
@@ -369,7 +369,7 @@ class LastUser(object):
         http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
         # XXX: We assume a user object that provides attribute access
         if g.user.lastuser_token_type != 'bearer':
-            raise LastUserResourceException("Unsupported token type.")
+            raise LastuserResourceException("Unsupported token type.")
         headers = {'Authorization': 'Bearer %s' % g.user.lastuser_token}
 
         if resource_details['method'] == 'GET':
@@ -395,9 +395,12 @@ class LastUser(object):
         # Parse the result
         if http_response.status != 200:
             # XXX: What other status codes could we possibly get from a REST call?
-            raise LastUserResourceException("Resource returned status %d." % http_response.status)
+            raise LastuserResourceException("Resource returned status %d." % http_response.status)
         if http_response.get('content-type') in ['text/json', 'application/json']:
             result = json.loads(http_content)
         else:
             result = http_content
         return result
+
+# Compatibility name
+LastUser = Lastuser

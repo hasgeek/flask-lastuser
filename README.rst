@@ -1,3 +1,3 @@
 flask-lastuser
 
-Flask extension for LastUser
+Flask extension for Lastuser

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Flask-LastUser documentation build configuration file, created by
+# Flask-Lastuser documentation build configuration file, created by
 # sphinx-quickstart on Fri May 20 23:26:50 2011.
 #
 # This file is execfile()d with the current directory set to its containing dir.
@@ -40,8 +40,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Flask-LastUser'
-copyright = u'2011, Kiran Jonnalagadda'
+project = u'Flask-Lastuser'
+copyright = u'2011-12, HasGeek Media LLP'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -164,7 +164,7 @@ html_static_path = ['_static']
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'Flask-LastUserdoc'
+htmlhelp_basename = 'Flask-Lastuserdoc'
 
 
 # -- Options for LaTeX output --------------------------------------------------
@@ -178,7 +178,7 @@ htmlhelp_basename = 'Flask-LastUserdoc'
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'Flask-LastUser.tex', u'Flask-LastUser Documentation',
+  ('index', 'Flask-Lastuser.tex', u'Flask-Lastuser Documentation',
    u'Kiran Jonnalagadda', 'manual'),
 ]
 
