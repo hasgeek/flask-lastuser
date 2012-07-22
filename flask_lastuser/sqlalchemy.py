@@ -144,3 +144,13 @@ class UserManager(object):
         # This is called before the request is processed by the client app, so there should be no
         # other data in the transaction
         self.db.session.commit()
+
+    def user_emails(self, lastuser, user):
+        """
+        Retrieve all known email addresses for the given user.
+        """
+        result = lastuser.call_resource('email', all=1)
+        if result.get('status') == 'ok':
+            return result['result']['all']
+        else:
+            return []

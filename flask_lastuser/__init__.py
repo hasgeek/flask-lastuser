@@ -17,6 +17,7 @@ import urlparse
 import httplib2
 import urllib
 import re
+from coaster.views import get_current_url, get_next_url
 
 from flask import session, g, redirect, url_for, request, json, flash, abort, Response
 
@@ -88,6 +89,10 @@ class Lastuser(object):
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
 
+        # Register known external resources provided by Lastuser itself
+        self.external_resource('email', urlparse.urljoin(self.lastuser_server, 'api/1/email'), 'GET')
+        self.external_resource('email/add', urlparse.urljoin(self.lastuser_server, 'api/1/email/add'), 'POST')
+
         self.app.before_request(self.before_request)
 
     def init_usermanager(self, um):
@@ -107,7 +112,7 @@ class Lastuser(object):
                 if not self._login_handler:
                     abort(403)
                 return redirect(url_for(self._login_handler.__name__,
-                    next=url_for(request.endpoint, **request.view_args)))
+                    next=get_current_url()))
             return f(*args, **kwargs)
         return decorated_function
 
@@ -131,7 +136,7 @@ class Lastuser(object):
                     if not self._login_handler:
                         abort(403)
                     return redirect(url_for(self._login_handler.__name__,
-                        next=url_for(request.endpoint, **request.view_args)))
+                        next=get_current_url()))
                 if not self.has_permission(permission):
                     abort(403)
                 return f(*args, **kwargs)
@@ -147,7 +152,7 @@ class Lastuser(object):
             if 'cookietest' not in request.args:
                 # Check if the user's browser supports cookies
                 session['cookies'] = True
-                return redirect(url_for(self._login_handler.__name__, cookietest=1))
+                return redirect(url_for(self._login_handler.__name__, cookietest=1, next=get_next_url()))
             else:
                 if not session.get('cookies'):
                     # No support for cookies. Abort login
@@ -401,6 +406,13 @@ class Lastuser(object):
         else:
             result = http_content
         return result
+
+    def user_emails(self, user):
+        """
+        Retrieve all known email addresses for the given user.
+        """
+        # TODO: If this is ever cached, provide a way to flush cache
+        return self.usermanager.user_emails(self, user)
 
 # Compatibility name
 LastUser = Lastuser
