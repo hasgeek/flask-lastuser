@@ -191,8 +191,11 @@ class Lastuser(object):
             session.pop('lastuser_userid', None)
             if not (next.startswith('http:') or next.startswith('https:')):
                 next = urlparse.urljoin(request.url_root, next)
-            return redirect(urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
-                % (urllib.quote(self.client_id), urllib.quote(next)))
+            return Response('<!DOCTYPE html>\n'
+                '<html><head><meta http-equiv="refresh" content="0; url=%(url)s"></head>\n'
+                '<body>Logging you out...</body></html>' % {
+                    'url': urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
+                % (urllib.quote(self.client_id), urllib.quote(next))})
         return decorated_function
 
     def auth_handler(self, f):
