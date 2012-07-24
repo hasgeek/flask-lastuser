@@ -183,12 +183,17 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if 'cookietest' not in request.args:
+            if session.new and 'cookietest' not in request.args:
                 # Check if the user's browser supports cookies
                 session['cookies'] = True
-                return redirect(url_for(self._login_handler.__name__, cookietest=1, next=get_next_url()))
+                # Reconstruct current URL with ?cookietest=1 or &cookietest=1 appended
+                url_parts = urlparse.urlsplit(request.url)
+                if url_parts.query:
+                    return redirect(request.url + '&cookietest=1')
+                else:
+                    return redirect(request.url + '?cookietest=1')
             else:
-                if not session.get('cookies'):
+                if session.new:
                     # No support for cookies. Abort login
                     return self._auth_error_handler('no_cookies',
                         error_description=u"Your browser must accept cookies to login.",
@@ -196,7 +201,7 @@ class Lastuser(object):
 
             data = f(*args, **kwargs)
             scope = data.get('scope', 'id')
-            next = request.args.get('next') or request.referrer or None
+            next = data.get('next') or get_next_url()
             return self._login_handler_internal(scope, next)
         self._login_handler = f
         return decorated_function
