@@ -45,7 +45,12 @@ class UserInfo(object):
     """
     User info object that is inserted into the context variable container (flask.g)
     """
-    def __init__(self, userid, username, fullname, email=None, permissions=(), organizations=None):
+    def __init__(self, token, token_type, token_scope, userid,
+            username, fullname, email=None,
+            permissions=(), organizations=None):
+        self.token = token
+        self.token_type = token_type
+        self.token_scope = token_scope
         self.userid = userid
         self.username = username
         self.fullname = fullname
@@ -129,6 +134,9 @@ class Lastuser(object):
         return permission in self.permissions()
 
     def requires_permission(self, permission):
+        """
+        Decorator that checks if the user has a certain permission from Lastuser.
+        """
         def inner(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
@@ -139,6 +147,32 @@ class Lastuser(object):
                         next=get_current_url()))
                 if not self.has_permission(permission):
                     abort(403)
+                return f(*args, **kwargs)
+            return decorated_function
+        return inner
+
+    def requires_scope(self, *scope):
+        """
+        Decorator that checks if the user's access token includes the specified scope.
+        If not present, it redirects the user to Lastuser to request access rights.
+        """
+        def inner(f):
+            @wraps(f)
+            def decorated_function(*args, **kwargs):
+                # If the user's not logged in, log them in
+                if g.lastuserinfo is None:
+                    if not self._login_handler:
+                        abort(403)
+                    return redirect(url_for(self._login_handler.__name__,
+                        next=get_current_url()))
+                # If the user is logged in, check if they have the required scope.
+                # If not, send them off to Lastuser with the additional scope.
+                existing = g.lastuserinfo.token_scope.split(' ')
+                for item in scope:
+                    if item not in existing:
+                        required = set(self._login_handler().get('scope', 'id').split(' '))
+                        required.update(scope)
+                        return self._login_handler_internal(scope=' '.join(required), next=get_current_url())
                 return f(*args, **kwargs)
             return decorated_function
         return inner
@@ -161,24 +195,28 @@ class Lastuser(object):
                         error_uri="")
 
             data = f(*args, **kwargs)
-            if not self._redirect_uri_name:
-                raise LastuserConfigException("No authorization handler defined")
-            session['lastuser_state'] = randomstring()
-            session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
-                    next=request.args.get('next') or request.referrer or None,
-                    _external=True)
-            # Discard currently logged in user
-            session.pop('lastuser_userid', None)
-            return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
-                urllib.urlencode({
-                    'response_type': 'code',
-                    'client_id': self.client_id,
-                    'redirect_uri': session['lastuser_redirect_uri'],
-                    'scope': data.get('scope', 'id'),
-                    'state': session['lastuser_state'],
-                })))
+            scope = data.get('scope', 'id')
+            next = request.args.get('next') or request.referrer or None
+            return self._login_handler_internal(scope, next)
         self._login_handler = f
         return decorated_function
+
+    def _login_handler_internal(self, scope, next):
+        if not self._redirect_uri_name:
+            raise LastuserConfigException("No authorization handler defined")
+        session['lastuser_state'] = randomstring()
+        session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
+                next=next, _external=True)
+        # Discard currently logged in user
+        session.pop('lastuser_userid', None)
+        return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
+            urllib.urlencode({
+                'response_type': 'code',
+                'client_id': self.client_id,
+                'redirect_uri': session['lastuser_redirect_uri'],
+                'scope': scope,
+                'state': session['lastuser_state'],
+            })))
 
     def logout_handler(self, f):
         """
@@ -376,9 +414,9 @@ class Lastuser(object):
 
         http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
         # XXX: We assume a user object that provides attribute access
-        if g.user.lastuser_token_type != 'bearer':
+        if g.lastuserinfo.token_type != 'bearer':
             raise LastuserResourceException("Unsupported token type.")
-        headers = {'Authorization': 'Bearer %s' % g.user.lastuser_token}
+        headers = {'Authorization': 'Bearer %s' % g.lastuserinfo.token}
 
         if resource_details['method'] == 'GET':
             # Encode body into the query

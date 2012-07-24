@@ -108,7 +108,10 @@ class UserManager(object):
                 user = self.usermodel(userid=session['lastuser_userid'])
                 self.db.session.add(user)
             g.user = user
-            g.lastuserinfo = UserInfo(userid=user.userid,
+            g.lastuserinfo = UserInfo(token=user.lastuser_token,
+                                      token_type=user.lastuser_token_type,
+                                      token_scope=user.lastuser_token_scope,
+                                      userid=user.userid,
                                       username=user.username,
                                       fullname=user.fullname,
                                       email=user.email,
