@@ -17,7 +17,7 @@ from flask import g, current_app, json, session
 from sqlalchemy import Column, String, Unicode, UnicodeText
 from sqlalchemy.orm import deferred, undefer
 from sqlalchemy.ext.declarative import declared_attr
-from flask.ext.lastuser import UserInfo
+from flask.ext.lastuser import UserInfo, UserManagerBase
 from coaster.sqlalchemy import BaseMixin
 
 
@@ -91,7 +91,7 @@ class UserBase(BaseMixin):
     user_organization_owned_ids = user_organizations_owned_ids
 
 
-class UserManager(object):
+class UserManager(UserManagerBase):
     """
     User manager that automatically loads the current user's object from the database.
     """
@@ -147,13 +147,3 @@ class UserManager(object):
         # This is called before the request is processed by the client app, so there should be no
         # other data in the transaction
         self.db.session.commit()
-
-    def user_emails(self, lastuser, user):
-        """
-        Retrieve all known email addresses for the given user.
-        """
-        result = lastuser.call_resource('email', all=1)
-        if result.get('status') == 'ok':
-            return result['result']['all']
-        else:
-            return []

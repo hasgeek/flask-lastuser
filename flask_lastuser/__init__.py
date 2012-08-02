@@ -11,15 +11,14 @@
 
 from __future__ import absolute_import
 from functools import wraps
-from base64 import b64encode
 import uuid
 import urlparse
-import httplib2
+import requests
 import urllib
 import re
 from coaster.views import get_current_url, get_next_url
 
-from flask import session, g, redirect, url_for, request, json, flash, abort, Response
+from flask import session, g, redirect, url_for, request, flash, abort, Response
 
 # Bearer token, as per http://tools.ietf.org/html/draft-ietf-oauth-v2-bearer-15#section-2.1
 auth_bearer_re = re.compile("^Bearer ([a-zA-Z0-9_.~+/-]+=*)$")
@@ -57,6 +56,39 @@ class UserInfo(object):
         self.email = email
         self.permissions = permissions
         self.organizations = organizations
+
+
+class UserManagerBase(object):
+    """
+    Base class for database-aware user managers.
+    """
+    def before_request(self):
+        """
+        Listener that is called at the start of each request. Responsible for
+        setting g.user and g.lastuserinfo
+        """
+        g.user = None
+        g.lastuserinfo = None
+
+    def login_listener(self, userinfo, token):
+        """
+        Listener that is called when a user logs in. ``userinfo`` and ``token``
+        are dictionaries containing data received from Lastuser.
+        """
+        self.before_request()
+
+    def user_emails(self, lastuser, user):
+        """
+        Retrieve all known email addresses for the given user.
+        """
+        result = lastuser.call_resource('email', all=1,
+            _token=user.lastuser_token,
+            _token_type=user.lastuser_token_type)
+
+        if result.get('status') == 'ok':
+            return result['result']['all']
+        else:
+            return []
 
 
 class Lastuser(object):
@@ -166,7 +198,7 @@ class Lastuser(object):
                     return redirect(url_for(self._login_handler.__name__,
                         next=get_current_url()))
                 # If the user is logged in, check if they have the required scope.
-                # If not, send them off to Lastuser with the additional scope.
+                # If not, send them off to Lastuser for the additional scope.
                 existing = g.lastuserinfo.token_scope.split(' ')
                 for item in scope:
                     if item not in existing:
@@ -269,20 +301,13 @@ class Lastuser(object):
             # Validations done
 
             # Step 2: Get the auth token
-            http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
-            http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
-                'POST',
-                headers={'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                         'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
-                body=urllib.urlencode({
-                    'code': code,
-                    'redirect_uri': session.get('lastuser_redirect_uri'),
-                    'grant_type': 'authorization_code',
-                    'scope': self._login_handler().get('scope', '')
-                    })
-                )
-
-            result = json.loads(http_content)
+            r = requests.post(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
+                auth=(self.client_id, self.client_secret),
+                data={'code': code,
+                      'redirect_uri': session.get('lastuser_redirect_uri'),
+                      'grant_type': 'authorization_code',
+                      'scope': self._login_handler().get('scope', '')})
+            result = r.json
 
             # Step 2.1: Remove temporary session variables
             session.pop('lastuser_redirect_uri', None)
@@ -337,15 +362,13 @@ class Lastuser(object):
 
     def _lastuser_api_call(self, endpoint, **kwargs):
         # Check this token with Lastuser's verify_token endpoint
-        http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
-        http_response, http_content = http.request(urlparse.urljoin(self.lastuser_server, endpoint), 'POST',
-            headers={'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                     'Authorization': 'Basic %s' % b64encode("%s:%s" % (self.client_id, self.client_secret))},
-            body=urllib.urlencode(kwargs))
-        if http_response.status in (400, 500, 401):
+        r = requests.post(urlparse.urljoin(self.lastuser_server, endpoint),
+            auth=(self.client_id, self.client_secret),
+            data=kwargs)
+        if r.status_code in (400, 500, 401):
             abort(500)
-        elif http_response.status == 200:
-            return json.loads(http_content)
+        elif r.status_code == 200:
+            return r.json
 
     def resource_handler(self, resource_name):
         """
@@ -410,48 +433,38 @@ class Lastuser(object):
             raise LastuserException("Unknown HTTP method '%s'" % method)
         self.external_resources[name] = {'endpoint': endpoint, 'method': method}
 
-    def call_resource(self, name, **kw):
+    def call_resource(self, name, files=None, _raw=False, _token=None, _token_type=None, **kw):
         """
         Call an external resource.
         """
         resource_details = self.external_resources[name]
-        endpoint = resource_details['endpoint']
 
-        http = httplib2.Http(cache=None, timeout=None, proxy_info=None)
-        # XXX: We assume a user object that provides attribute access
-        if g.lastuserinfo.token_type != 'bearer':
-            raise LastuserResourceException("Unsupported token type.")
-        headers = {'Authorization': 'Bearer %s' % g.lastuserinfo.token}
+        if _token is None:
+            if not g.lastuserinfo:
+                raise LastuserResourceException("No access token available")
+            _token = g.lastuserinfo.token
+            _token_type = g.lastuserinfo.token_type
+
+        if _token_type is None:
+            raise LastuserResourceException("Token type not provided")
+        if _token_type != 'bearer':
+            raise LastuserResourceException("Unsupported token type")
+
+        headers = {'Authorization': 'Bearer %s' % _token}
 
         if resource_details['method'] == 'GET':
-            # Encode body into the query
-            urlparts = list(urlparse.urlsplit(endpoint))
-            # URL parts:
-            # 0: scheme
-            # 1: netloc
-            # 2: path
-            # 3: query -- appended to
-            # 4: fragment
-            queryparts = urlparse.parse_qsl(urlparts[3], keep_blank_values=True)
-            queryparts.extend(kw.items())
-            urlparts[3] = urllib.urlencode(queryparts)
-            endpoint = urlparse.urlunsplit(urlparts)
-            http_response, http_content = http.request(endpoint, resource_details['method'],
-                headers=headers)
+            r = requests.get(resource_details['endpoint'], headers=headers, params=kw)
         else:
-            body = urllib.urlencode(kw)
-            headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=UTF-8'
-            http_response, http_content = http.request(endpoint, resource_details['method'],
-                headers=headers, body=body)
+            r = requests.request(resource_details['method'], resource_details['endpoint'],
+                headers=headers, data=kw, files=files)
         # Parse the result
-        if http_response.status != 200:
+        if r.status_code != 200:
             # XXX: What other status codes could we possibly get from a REST call?
-            raise LastuserResourceException("Resource returned status %d." % http_response.status)
-        if http_response.get('content-type') in ['text/json', 'application/json']:
-            result = json.loads(http_content)
+            raise LastuserResourceException("Resource returned status %d." % r.status_code)
+        if _raw:
+            return r
         else:
-            result = http_content
-        return result
+            return r.json or r.text
 
     def user_emails(self, user):
         """

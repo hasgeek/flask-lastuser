@@ -17,11 +17,11 @@ from setuptools import setup
 
 setup(
     name='Flask-Lastuser',
-    version='0.3.7',
+    version='0.3.8',
     url='https://github.com/hasgeek/flask-lastuser',
     license='BSD',
     author='Kiran Jonnalagadda',
-    author_email='kiran@hasgeek.in',
+    author_email='kiran@hasgeek.com',
     description='Flask extension for Lastuser',
     long_description=__doc__,
     packages=['flask_lastuser'],
@@ -32,7 +32,7 @@ setup(
     ],
     install_requires=[
         'Flask',
-        'httplib2',
+        'requests',
         'SQLAlchemy',
         'coaster>=0.3.1',
     ],
