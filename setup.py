@@ -1,14 +1,14 @@
 """
-flask-lastuser
---------------
+Flask-Lastuser
+==============
 
 Flask extension for HasGeek's Lastuser user management app
 
 Links
-`````
+-----
 
-* `documentation <http://packages.python.org/flask-lastuser>`_
-* `development version
+* `Documentation <http://packages.python.org/flask-lastuser>`_
+* `Development version
   <http://github.com/hasgeek/flask-lastuser/zipball/master#egg=flask-lastuser-dev>`_
 
 """
@@ -17,7 +17,7 @@ from setuptools import setup
 
 setup(
     name='Flask-Lastuser',
-    version='0.3.8',
+    version='0.3.9',
     url='https://github.com/hasgeek/flask-lastuser',
     license='BSD',
     author='Kiran Jonnalagadda',
@@ -27,9 +27,6 @@ setup(
     packages=['flask_lastuser'],
     zip_safe=False,
     platforms='any',
-    dependency_links=[
-        'https://github.com/hasgeek/coaster/zipball/master#egg=coaster',
-    ],
     install_requires=[
         'Flask',
         'requests',
