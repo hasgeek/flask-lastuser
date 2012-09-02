@@ -3,21 +3,23 @@
     flaskext.lastuser.sqlalchemy
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    SQLAlchemy extensions for flask-lastuser.
+    SQLAlchemy extensions for Flask-Lastuser.
 
     :copyright: (c) 2011-12 by HasGeek Media LLP.
     :license: BSD, see LICENSE for more details.
 """
+
 from __future__ import absolute_import
 
 __all__ = ['UserBase', 'UserManager']
 
 import urlparse
 from flask import g, current_app, json, session
-from sqlalchemy import Column, String, Unicode, UnicodeText
-from sqlalchemy.orm import deferred, undefer
+from sqlalchemy import Column, Boolean, Integer, String, Unicode, UnicodeText, ForeignKey, Table
+from sqlalchemy.orm import deferred, undefer, relationship
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase
+from coaster import getbool
 from coaster.sqlalchemy import BaseMixin
 
 
@@ -91,13 +93,35 @@ class UserBase(BaseMixin):
     user_organization_owned_ids = user_organizations_owned_ids
 
 
+class TeamBase(BaseMixin):
+    __tablename__ = 'team'
+    userid = Column(String(22), unique=True, nullable=False)
+    orgid = Column(String(22), nullable=False)
+    title = Column(Unicode(250), nullable=False)
+    owners = Column(Boolean, nullable=False, default=False)
+
+    @declared_attr
+    def users(cls):
+        return relationship('User', secondary='users_teams', backref='teams')
+
+
+def make_user_team_table(base):
+    return Table('users_teams', base.metadata,
+        Column('user_id', Integer, ForeignKey('user.id')),
+        Column('team_id', Integer, ForeignKey('team.id'))
+        )
+
+
 class UserManager(UserManagerBase):
     """
     User manager that automatically loads the current user's object from the database.
     """
-    def __init__(self, db, usermodel):
+    def __init__(self, db, usermodel, teammodel=None):
         self.db = db
         self.usermodel = usermodel
+        self.teammodel = teammodel
+        if teammodel is not None:
+            self.users_teams = make_user_team_table(db.Model)
 
     def before_request(self):
         if session.get('lastuser_userid'):
@@ -143,6 +167,46 @@ class UserManager(UserManagerBase):
         user.lastuser_token = token['access_token']
         user.lastuser_token_type = token['token_type']
         user.lastuser_token_scope = token['scope']
+
+        # Are we tracking teams? Sync data from Lastuser.
+
+        # TODO: Syncing the list of teams is an app operation, not a user operation.
+        # Move it out of here as there's a higher likelihood of database conflicts
+        if self.teammodel:
+            org_teams = self.lastuser.org_teams(user.organizations_memberof_ids())
+            # TODO: If an org has revoked access to teams for this app, it won't be in org_teams
+            # We need to scan for teams in organizations that aren't in this list and revoke them
+            user_team_ids = [t['userid'] for t in user.userinfo['teams']]
+            # org_teams will be empty if this app's team_access flag isn't set in lastuser
+            for orgid, teams in org_teams.items():
+                # 1/4: Remove teams that are no longer in lastuser
+                removed_teams = self.teammodel.query.filter_by(orgid=orgid).filter(
+                    ~self.teammodel.userid.in_([t['userid'] for t in teams])).all()
+                for team in removed_teams:
+                    self.db.session.delete(team)
+
+                for teamdata in teams:
+                    # 2/4: Create teams
+                    team = self.teammodel.query.filter_by(userid=teamdata['userid']).first()
+                    if team is None:
+                        team = self.teammodel(userid=teamdata['userid'],
+                                              orgid=teamdata['org'],
+                                              title=teamdata['title'],
+                                              owners=getbool(teamdata['owners']))
+                        self.db.session.add(team)
+                    else:
+                        # Check if title has changed. The others will never change
+                        if team.title != teamdata['title']:
+                            team.title = teamdata['title']
+                    if team.userid in user_team_ids:
+                        # 3/4: Add user to teams they are in
+                        if user not in team.users:
+                            team.users.append(user)
+                    else:
+                        # 4/4: Remove users from teams they are no longer in
+                        if user in team.users:
+                            team.users.pop(user)
+
         # Commit this so that token info is saved even if the user account is an existing account.
         # This is called before the request is processed by the client app, so there should be no
         # other data in the transaction

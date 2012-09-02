@@ -16,6 +16,7 @@ import urlparse
 import requests
 import urllib
 import re
+import weakref
 from coaster.views import get_current_url, get_next_url
 
 from flask import session, g, redirect, url_for, request, flash, abort, Response
@@ -123,6 +124,7 @@ class Lastuser(object):
         self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
         self.getuser_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
         self.getuser_userid_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
+        self.getorgteams_endpoint = app.config.get('LASTUSER_ENDPOINT_GETORGTEAMS', 'api/1/org/get_teams')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
 
@@ -134,6 +136,7 @@ class Lastuser(object):
 
     def init_usermanager(self, um):
         self.usermanager = um
+        um.lastuser = weakref.proxy(self)
 
     def before_request(self):
         if self.usermanager:
@@ -366,9 +369,14 @@ class Lastuser(object):
             return f(*args, **kw)
         return decorated_function
 
+    def endpoint_url(self, endpoint):
+        """
+        Returns the full URL to a given endpoint path on the current Lastuser server.
+        """
+        return urlparse.urljoin(self.lastuser_server, endpoint)
+
     def _lastuser_api_call(self, endpoint, **kwargs):
-        # Check this token with Lastuser's verify_token endpoint
-        r = requests.post(urlparse.urljoin(self.lastuser_server, endpoint),
+        r = requests.post(self.endpoint_url(endpoint),
             auth=(self.client_id, self.client_secret),
             data=kwargs)
         if r.status_code in (400, 500, 401):
@@ -478,6 +486,16 @@ class Lastuser(object):
         """
         # TODO: If this is ever cached, provide a way to flush cache
         return self.usermanager.user_emails(self, user)
+
+    def org_teams(self, org):
+        """
+        Get a list of teams in the given organization(s).
+        """
+        data = self._lastuser_api_call(self.getorgteams_endpoint, org=org)
+        if data['status'] == 'ok':
+            return data['org_teams']
+        else:
+            return {}
 
 # Compatibility name
 LastUser = Lastuser
