@@ -123,36 +123,45 @@ class UserManager(UserManagerBase):
         if teammodel is not None:
             self.users_teams = make_user_team_table(db.Model)
 
-    def before_request(self):
-        if session.get('lastuser_userid'):
-            # TODO: How do we cache this? Connect to a cache manager
-            user = self.usermodel.query.filter_by(userid=session['lastuser_userid']
-                ).options(undefer('_userinfo')).first()
-            if user is None:
+    def load_user(self, userid, create=False):
+        # TODO: How do we cache this? Connect to a cache manager
+        user = self.usermodel.query.filter_by(userid=session['lastuser_userid']
+            ).options(undefer('_userinfo')).first()
+        if user is None:
+            if create:
                 user = self.usermodel(userid=session['lastuser_userid'])
                 self.db.session.add(user)
-            g.user = user
-            g.lastuserinfo = UserInfo(token=user.lastuser_token,
-                                      token_type=user.lastuser_token_type,
-                                      token_scope=user.lastuser_token_scope,
-                                      userid=user.userid,
-                                      username=user.username,
-                                      fullname=user.fullname,
-                                      email=user.email,
-                                      permissions=user.userinfo.get('permissions', ()),
-                                      organizations=user.userinfo.get('organizations'))
-        else:
-            g.user = None
-            g.lastuserinfo = None
+        return user
 
-    def login_listener(self, userinfo, token):
-        self.before_request()
-        user = g.user
+    def make_userinfo(self, user):
+        return UserInfo(token=user.lastuser_token,
+                        token_type=user.lastuser_token_type,
+                        token_scope=user.lastuser_token_scope,
+                        userid=user.userid,
+                        username=user.username,
+                        fullname=user.fullname,
+                        email=user.email,
+                        permissions=user.userinfo.get('permissions', ()),
+                        organizations=user.userinfo.get('organizations'))
+
+    def load_user_userinfo(self, userinfo, update=False):
+        """
+        Load a user and update data from the userinfo.
+        """
+        user = self.load_user(userinfo['userid'], create=True)
         # Username, fullname and email may have changed, so set them again
-        user.username = userinfo['username']
-        user.fullname = userinfo['fullname']
-        user.email = userinfo.get('email') or None
-        user.userinfo = userinfo
+        if user.username != userinfo['username']:
+            user.username = userinfo['username']
+        if user.fullname != userinfo['fullname']:
+            user.fullname = userinfo['fullname']
+        if update:
+            if user.email != userinfo.get('email'):
+                user.email = userinfo.get('email') or None
+            user.userinfo = userinfo
+        else:
+            # Update email only if unset and don't touch userinfo
+            if user.email is None:
+                user.email = userinfo.get('email') or None
 
         # Watch for username/email conflicts. Remove from any existing user
         # that have the same username or email, for a conflict can only mean
@@ -164,13 +173,20 @@ class UserManager(UserManagerBase):
         if olduser is not None and olduser.id != user.id:
             olduser.email = None
 
+        return user
+
+    def login_listener(self, userinfo, token):
+        user = self.load_user_userinfo(userinfo, update=True)
         user.lastuser_token = token['access_token']
         user.lastuser_token_type = token['token_type']
         user.lastuser_token_scope = token['scope']
 
+        g.user = user
+        g.lastuserinfo = self.make_userinfo(user)
+
         # Are we tracking teams? Sync data from Lastuser.
 
-        # TODO: Syncing the list of teams is an app operation, not a user operation.
+        # TODO: Syncing the list of teams is an org-level operation, not a user-level operation.
         # Move it out of here as there's a higher likelihood of database conflicts
         if self.teammodel:
             org_teams = self.lastuser.org_teams(user.organizations_memberof_ids())

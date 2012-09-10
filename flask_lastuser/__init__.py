@@ -63,13 +63,46 @@ class UserManagerBase(object):
     """
     Base class for database-aware user managers.
     """
+    def load_user(self, userid, create=False):
+        raise NotImplementedError("Not implemented in the base class")
+
+    def make_userinfo(self, user):
+        raise NotImplementedError("Not implemented in the base class")
+
+    def load_user_userinfo(self, userinfo):
+        raise NotImplementedError("Not implemented in the base class")
+
     def before_request(self):
         """
         Listener that is called at the start of each request. Responsible for
         setting g.user and g.lastuserinfo
         """
-        g.user = None
-        g.lastuserinfo = None
+        if session.get('lastuser_userid'):
+            user = self.load_user(session['lastuser_userid'])
+            if user is None:
+                # We'll get here if one of two things happens:
+                # 1. This is a dev setup and the local database was deleted.
+                # 2. Multiple apps are hosted on one domain and we got a cookie
+                #    from another app, but we've never heard of this user before.
+                # In either situation, try to create a new user record
+                userdata = self.lastuser.getuser_by_userid(session['lastuser_userid'])
+                if userdata.get('type') == 'user':
+                    # This is an actual user. Make an account
+                    user = self.load_user(session['lastuser_userid'], create=True)
+                    user.username = userdata['name']
+                    user.fullname = userdata['title']
+                    self.db.session.commit()
+                else:
+                    # No such user. Pop the session
+                    session.pop('lastuser_userid', None)
+        else:
+            user = None
+
+        g.user = user
+        if user:
+            g.lastuserinfo = self.make_userinfo(user)
+        else:
+            g.lastuserinfo = None
 
     def login_listener(self, userinfo, token):
         """
@@ -78,11 +111,11 @@ class UserManagerBase(object):
         """
         self.before_request()
 
-    def user_emails(self, lastuser, user):
+    def user_emails(self, user):
         """
         Retrieve all known email addresses for the given user.
         """
-        result = lastuser.call_resource('email', all=1,
+        result = self.lastuser.call_resource('email', all=1,
             _token=user.lastuser_token,
             _token_type=user.lastuser_token_type)
 
@@ -418,7 +451,8 @@ class Lastuser(object):
                     return Response(u"Invalid token.", 403)
                 elif result['status'] == 'ok':
                     # All okay.
-                    # TODO: If the user is unknown, make a new user
+                    # If the user is unknown, make a new user. If the user is known, don't update scoped data
+                    g.user = self.usermanager.load_user_userinfo(result['userinfo'], update=False)
                     return f(result, *args, **kw)
             return decorated_function
         return inner
@@ -485,7 +519,7 @@ class Lastuser(object):
         Retrieve all known email addresses for the given user.
         """
         # TODO: If this is ever cached, provide a way to flush cache
-        return self.usermanager.user_emails(self, user)
+        return self.usermanager.user_emails(user)
 
     def org_teams(self, org):
         """
