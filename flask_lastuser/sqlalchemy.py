@@ -125,11 +125,11 @@ class UserManager(UserManagerBase):
 
     def load_user(self, userid, create=False):
         # TODO: How do we cache this? Connect to a cache manager
-        user = self.usermodel.query.filter_by(userid=session['lastuser_userid']
+        user = self.usermodel.query.filter_by(userid=userid
             ).options(undefer('_userinfo')).first()
         if user is None:
             if create:
-                user = self.usermodel(userid=session['lastuser_userid'])
+                user = self.usermodel(userid=userid)
                 self.db.session.add(user)
         return user
 
