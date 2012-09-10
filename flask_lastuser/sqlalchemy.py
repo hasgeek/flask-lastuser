@@ -14,7 +14,7 @@ from __future__ import absolute_import
 __all__ = ['UserBase', 'UserManager']
 
 import urlparse
-from flask import g, current_app, json, session
+from flask import g, current_app, json
 from sqlalchemy import Column, Boolean, Integer, String, Unicode, UnicodeText, ForeignKey, Table
 from sqlalchemy.orm import deferred, undefer, relationship
 from sqlalchemy.ext.declarative import declared_attr
