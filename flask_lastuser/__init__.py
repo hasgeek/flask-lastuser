@@ -453,6 +453,7 @@ class Lastuser(object):
                     # All okay.
                     # If the user is unknown, make a new user. If the user is known, don't update scoped data
                     g.user = self.usermanager.load_user_userinfo(result['userinfo'], update=False)
+                    g.lastuserinfo = self.usermanager.make_userinfo(g.user)
                     return f(result, *args, **kw)
             return decorated_function
         return inner
