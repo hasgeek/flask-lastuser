@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-    flaskext.lastuser
-    ~~~~~~~~~~~~~~~~~
+    flask.ext.lastuser
+    ~~~~~~~~~~~~~~~~~~
 
     Flask extension for Lastuser
 

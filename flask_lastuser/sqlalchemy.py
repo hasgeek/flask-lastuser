@@ -28,14 +28,35 @@ class UserBase(BaseMixin):
     Base class for user definition.
     """
     __tablename__ = 'user'
-    userid = Column(String(22), unique=True, nullable=False)
-    username = Column(Unicode(80), unique=True, nullable=True)  # Usernames are optional
-    fullname = Column(Unicode(80), default=u'', nullable=False)
-    email = Column(Unicode(80), unique=True, nullable=True)  # We may not get an email address
+
+    @declared_attr
+    def userid(cls):
+        return Column(String(22), unique=True, nullable=False)
+
+    @declared_attr
+    def username(cls):
+        return Column(Unicode(80), unique=True, nullable=True)  # Usernames are optional
+
+    @declared_attr
+    def fullname(cls):
+        return Column(Unicode(80), default=u'', nullable=False)
+
+    @declared_attr
+    def email(cls):
+        return Column(Unicode(80), unique=True, nullable=True)  # We may not get an email address
+
     # Access token info
-    lastuser_token = Column(String(22), nullable=True, unique=True)
-    lastuser_token_type = Column(Unicode(250), nullable=True)
-    lastuser_token_scope = Column(Unicode(250), nullable=True)
+    @declared_attr
+    def lastuser_token(cls):
+        return Column(String(22), nullable=True, unique=True)
+
+    @declared_attr
+    def lastuser_token_type(cls):
+        return Column(Unicode(250), nullable=True)
+
+    @declared_attr
+    def lastuser_token_scope(cls):
+        return Column(Unicode(250), nullable=True)
 
     # Userinfo
     @declared_attr
@@ -95,10 +116,22 @@ class UserBase(BaseMixin):
 
 class TeamBase(BaseMixin):
     __tablename__ = 'team'
-    userid = Column(String(22), unique=True, nullable=False)
-    orgid = Column(String(22), nullable=False)
-    title = Column(Unicode(250), nullable=False)
-    owners = Column(Boolean, nullable=False, default=False)
+
+    @declared_attr
+    def userid(cls):
+        return Column(String(22), unique=True, nullable=False)
+
+    @declared_attr
+    def orgid(cls):
+        return Column(String(22), nullable=False)
+
+    @declared_attr
+    def title(cls):
+        return Column(Unicode(250), nullable=False)
+
+    @declared_attr
+    def owners(cls):
+        return Column(Boolean, nullable=False, default=False)
 
     @declared_attr
     def users(cls):
