@@ -482,7 +482,8 @@ class Lastuser(object):
             raise LastuserException("Unknown HTTP method '%s'" % method)
         self.external_resources[name] = {'endpoint': endpoint, 'method': method}
 
-    def call_resource(self, name, files=None, _raw=False, _token=None, _token_type=None, **kw):
+    def call_resource(self, name, headers=None, data=None, files=None,
+                      _raw=False, _token=None, _token_type=None, **kw):
         """
         Call an external resource.
         """
@@ -499,13 +500,18 @@ class Lastuser(object):
         if _token_type != 'bearer':
             raise LastuserResourceException("Unsupported token type")
 
-        headers = {'Authorization': 'Bearer %s' % _token}
+        if headers is None:
+            headers = {}
+        else:
+            # Make a copy before modifying
+            headers = dict(headers)
+        headers['Authorization'] = 'Bearer %s' % _token
 
         if resource_details['method'] == 'GET':
             r = requests.get(resource_details['endpoint'], headers=headers, params=kw)
         else:
             r = requests.request(resource_details['method'], resource_details['endpoint'],
-                headers=headers, data=kw, files=files)
+                headers=headers, data=data if data is not None else kw, files=files)
         # Parse the result
         if r.status_code != 200:
             # XXX: What other status codes could we possibly get from a REST call?
