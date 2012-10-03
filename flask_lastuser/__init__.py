@@ -86,7 +86,7 @@ class UserManagerBase(object):
                 #    from another app, but we've never heard of this user before.
                 # In either situation, try to create a new user record
                 userdata = self.lastuser.getuser_by_userid(session['lastuser_userid'])
-                if userdata.get('type') == 'user':
+                if userdata and userdata.get('type') == 'user':
                     # This is an actual user. Make an account
                     user = self.load_user(session['lastuser_userid'], create=True)
                     user.username = userdata['name']
