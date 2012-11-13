@@ -1,13 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-    flask.ext.lastuser
-    ~~~~~~~~~~~~~~~~~~
-
-    Flask extension for Lastuser
-
-    :copyright: (c) 2011-12 by HasGeek Media LLP.
-    :license: BSD, see LICENSE for more details.
-"""
 
 from __future__ import absolute_import
 from functools import wraps
