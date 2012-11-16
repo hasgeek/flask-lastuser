@@ -14,9 +14,11 @@ Flask extension for Lastuser.
 .. toctree::
    :maxdepth: 2
 
-.. automodule:: flask_lastuser
+.. automodule:: __init__
    :members:
 
+.. automodule:: flask_lastuser.sqlalchemy
+   :members:
 
 Indices and tables
 ==================
