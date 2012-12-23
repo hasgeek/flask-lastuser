@@ -340,7 +340,7 @@ class Lastuser(object):
                       'redirect_uri': session.get('lastuser_redirect_uri'),
                       'grant_type': 'authorization_code',
                       'scope': self._login_handler().get('scope', '')})
-            result = r.json
+            result = r.json() if callable(r.json) else r.json
 
             # Step 2.1: Remove temporary session variables
             session.pop('lastuser_redirect_uri', None)
@@ -406,7 +406,7 @@ class Lastuser(object):
         if r.status_code in (400, 500, 401):
             abort(500)
         elif r.status_code == 200:
-            return r.json
+            return r.json() if callable(r.json) else r.json
 
     def resource_handler(self, resource_name):
         """
@@ -510,7 +510,7 @@ class Lastuser(object):
         if _raw:
             return r
         else:
-            return r.json or r.text
+            return (r.json() if callable(r.json) else r.json) or r.text
 
     def user_emails(self, user):
         """
