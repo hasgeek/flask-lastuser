@@ -251,7 +251,7 @@ class UserManager(UserManagerBase):
                     else:
                         # 4/4: Remove users from teams they are no longer in
                         if user in team.users:
-                            team.users.pop(user)
+                            team.users.remove(user)
 
         # Commit this so that token info is saved even if the user account is an existing account.
         # This is called before the request is processed by the client app, so there should be no
