@@ -57,6 +57,9 @@ class UserManagerBase(object):
     def load_user(self, userid, create=False):
         raise NotImplementedError("Not implemented in the base class")
 
+    def load_user_by_username(self, username):
+        raise NotImplementedError("Not implemented in the base class")
+
     def make_userinfo(self, user):
         raise NotImplementedError("Not implemented in the base class")
 
@@ -72,7 +75,7 @@ class UserManagerBase(object):
             user = self.load_user(session['lastuser_userid'])
             if user is None:
                 # We'll get here if one of two things happens:
-                # 1. This is a dev setup and the local database was deleted.
+                # 1. This is a dev setup and the local database was deleted or replaced
                 # 2. Multiple apps are hosted on one domain and we got a cookie
                 #    from another app, but we've never heard of this user before.
                 # In either situation, try to create a new user record
@@ -82,6 +85,9 @@ class UserManagerBase(object):
                     user = self.load_user(session['lastuser_userid'], create=True)
                     user.username = userdata['name']
                     user.fullname = userdata['title']
+                    olduser = self.load_user_by_username(userdata['name'])
+                    if olduser and olduser != user:
+                        olduser.username = None
                     self.db.session.commit()
                 else:
                     # No such user. Pop the session

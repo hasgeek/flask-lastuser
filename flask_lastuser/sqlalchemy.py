@@ -163,6 +163,9 @@ class UserManager(UserManagerBase):
                 self.db.session.add(user)
         return user
 
+    def load_user_by_username(self, username):
+        return self.usermodel.query.filter_by(username=username).first()
+
     def make_userinfo(self, user):
         return UserInfo(token=user.lastuser_token,
                         token_type=user.lastuser_token_type,
