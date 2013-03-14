@@ -1,19 +1,24 @@
-"""
-Flask-Lastuser
-==============
+import os
+import re
+from setuptools import setup, find_packages
 
-Flask extension for HasGeek's Lastuser user management app
+here = os.path.abspath(os.path.dirname(__file__))
+README = unicode(open(os.path.join(here, 'README.rst')).read(), 'utf-8')
+CHANGES = unicode(open(os.path.join(here, 'CHANGES.rst')).read(), 'utf-8')
+versionfile = open(os.path.join(here, "flask_lastuser", "_version.py")).read()
 
-Links
------
+mo = re.search(r"^__version__\s*=\s*['\"]([^'\"]*)['\"]", versionfile, re.M)
+if mo:
+    version = mo.group(1)
+else:
+    raise RuntimeError("Unable to find version string in flask_lastuser/_version.py.")
 
-* `Documentation <http://packages.python.org/flask-lastuser>`_
-* `Development version
-  <http://github.com/hasgeek/flask-lastuser/zipball/master#egg=flask-lastuser-dev>`_
-
-"""
-from setuptools import setup
-
+requires = [
+    'Flask',
+    'requests',
+    'SQLAlchemy',
+    'coaster>=0.3.1',
+    ]
 
 setup(
     name='Flask-Lastuser',
@@ -23,16 +28,12 @@ setup(
     author='Kiran Jonnalagadda',
     author_email='kiran@hasgeek.com',
     description='Flask extension for Lastuser',
-    long_description=__doc__,
-    packages=['flask_lastuser'],
-    zip_safe=False,
+    long_description=README + '\n\n' + CHANGES,
+    packages=find_packages(),
+    include_package_data=True,
+    zip_safe=True,
     platforms='any',
-    install_requires=[
-        'Flask',
-        'requests',
-        'SQLAlchemy',
-        'coaster>=0.3.1',
-    ],
+    install_requires=requires,
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
