@@ -8,7 +8,7 @@
 
 from __future__ import absolute_import
 
-__all__ = ['UserBase', 'UserManager']
+__all__ = ['UserBase', 'TeamBase', 'ProfileMixin', 'UserManager']
 
 import urlparse
 from flask import g, current_app, json
@@ -133,6 +133,17 @@ class TeamBase(BaseMixin):
     @declared_attr
     def users(cls):
         return relationship('User', secondary='users_teams', backref='teams')
+
+
+class ProfileMixin(object):
+    def permissions(self, user, inherited=None):
+        perms = super(ProfileMixin, self).permissions(user, inherited)
+        perms.add('view')
+        if user and self.buid in user.user_organizations_owned_ids():
+            perms.add('edit')
+            perms.add('delete')
+            perms.add('new')
+        return perms
 
 
 def make_user_team_table(base):
