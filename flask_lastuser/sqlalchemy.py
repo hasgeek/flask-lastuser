@@ -12,7 +12,7 @@ __all__ = ['UserBase', 'TeamBase', 'ProfileMixin', 'UserManager']
 
 import urlparse
 from flask import g, current_app, json
-from sqlalchemy import Column, Boolean, Integer, String, Unicode, UnicodeText, ForeignKey, Table
+from sqlalchemy import Column, Boolean, Integer, String, Unicode, UnicodeText, ForeignKey, Table, UniqueConstraint
 from sqlalchemy.orm import deferred, undefer, relationship
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase
@@ -136,6 +136,10 @@ class TeamBase(BaseMixin):
 
 
 class ProfileMixin(object):
+    """
+    ProfileMixin provides methods to assist with creating Profile models (which represent
+    both User and Organization models), and keeping them updated as user data changes.
+    """
     def permissions(self, user, inherited=None):
         perms = super(ProfileMixin, self).permissions(user, inherited)
         perms.add('view')
@@ -144,6 +148,81 @@ class ProfileMixin(object):
             perms.add('delete')
             perms.add('new')
         return perms
+
+    @classmethod
+    def update_from_user(cls, user):
+        """
+        Update profiles from the given user's organizations.
+        """
+        # TODO
+        pass
+
+
+class UserMigrateMixin(object):
+    """
+    UserMigrateMixin provides helper methods to handle user data migration when user
+    accounts are merged. It depends on the class having a ``user_id`` column that points
+    to the ``user`` table.
+    """
+    @classmethod
+    def _get_user_id_unique_with(cls):
+        """
+        Return the user_id column and the other columns it's unique with
+        """
+        if 'user_id' not in cls.__table__.c:  # pragma: no cover
+            return None, []  # This table does have a user_id column
+        user_id_col = cls.__table__.c.user_id
+        unique_with = []
+        if not user_id_col.primary_key and not user_id_col.unique:
+            # user_id is present but isn't a primary key or unique by itself.
+            # Is there a unique constraint involving user_id? Find the other columns
+            for constraint in cls.__table__.constraints:
+                if isinstance(constraint, UniqueConstraint):
+                    candidate = False
+                    other_columns = []
+                    for column in constraint.columns:
+                        if column == user_id_col:
+                            candidate = True
+                        else:
+                            other_columns.append(column)
+                    if candidate:
+                        unique_with.extend(other_columns)
+        return user_id_col, unique_with
+
+    @classmethod
+    def migrate_user_conflicts(cls, olduser, newuser):
+        """
+        Return rows with conflicting data when migrating from olduser to newuser.
+        This involves checking for unique constraints on the ``user_id`` column.
+
+        If this model has no ``user_id`` or no unique constraint on ``user_id``,
+        an empty list is returned.
+
+        :returns: List of 2-tuples of conflicting rows
+        """
+        user_id_col, unique_with = cls._get_user_id_unique_with()
+        if user_id_col is None:
+            return []
+        # TODO
+
+    @classmethod
+    def migrate_user(cls, olduser, newuser, discard=[]):
+        """
+        Merge data for olduser into newuser. ``discard`` should be a list of row ids
+        to be discarded.
+        """
+        user_id_col, unique_with = cls._get_user_id_unique_with()
+        if user_id_col is None:
+            return
+        for row in discard:
+            cls.query.filter_by(id=row).delete()
+        # TODO
+
+    def merge_data_from(self, other):
+        """
+        Merge data from the other instance.
+        """
+        raise NotImplementedError("Subclasses must provide this method.")
 
 
 def make_user_team_table(base):
