@@ -107,6 +107,10 @@ class UserBase(BaseMixin):
     def profile_url(self):
         return urlparse.urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
 
+    def organization_links(self):
+        """Links to the user's organizations on the current site."""
+        return []
+
     # NOTE: Compatibility definition, please do not use in new code
     user_organization_owned_ids = user_organizations_owned_ids
 
