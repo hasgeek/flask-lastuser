@@ -185,12 +185,10 @@ class Lastuser(object):
         if 'Expires' not in response.headers:
             response.headers['Expires'] = 'Fri, 01 Jan 1990 00:00:00 GMT'
         if 'Cache-Control' in response.headers:
-            if 'max-age' not in response.headers['Cache-Control']:
-                response.headers['Cache-Control'] = 'max-age=86400, ' + response.headers['Cache-Control']
             if 'private' not in response.headers['Cache-Control']:
                 response.headers['Cache-Control'] = 'private, ' + response.headers['Cache-Control']
         else:
-            response.headers['Cache-Control'] = 'private, max-age=86400'
+            response.headers['Cache-Control'] = 'private'
         return response
 
     def requires_login(self, f):
