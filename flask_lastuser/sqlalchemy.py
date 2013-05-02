@@ -276,6 +276,21 @@ class UserManager(UserManagerBase):
         Load a user and update data from the userinfo.
         """
         user = self.load_user(userinfo['userid'], create=True)
+
+        # Watch for username/email conflicts. Remove from any existing user
+        # that have the same username or email, for a conflict can only mean
+        # that we didn't hear of this change when it happened in Lastuser
+        olduser = self.usermodel.query.filter_by(username=userinfo['username']).first()
+        if olduser is not None and olduser.id != user.id:
+            olduser.username = None
+        if userinfo.get('email'):
+            olduser = self.usermodel.query.filter_by(email=userinfo.get('email')).first()
+            if olduser is not None and olduser.id != user.id:
+                olduser.email = None
+
+        # Flush the changes before updating the current user account
+        self.db.session.flush()
+
         # Username, fullname and email may have changed, so set them again
         if user.username != userinfo['username']:
             user.username = userinfo['username']
@@ -289,16 +304,6 @@ class UserManager(UserManagerBase):
             # Update email only if unset and don't touch userinfo
             if user.email is None:
                 user.email = userinfo.get('email') or None
-
-        # Watch for username/email conflicts. Remove from any existing user
-        # that have the same username or email, for a conflict can only mean
-        # that we didn't hear of this change when it happened in Lastuser
-        olduser = self.usermodel.query.filter_by(username=user.username).first()
-        if olduser is not None and olduser.id != user.id:
-            olduser.username = None
-        olduser = self.usermodel.query.filter_by(email=user.email).first()
-        if olduser is not None and olduser.id != user.id:
-            olduser.email = None
 
         return user
 
