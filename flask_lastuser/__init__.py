@@ -185,7 +185,7 @@ class Lastuser(object):
         if 'Expires' not in response.headers:
             response.headers['Expires'] = 'Fri, 01 Jan 1990 00:00:00 GMT'
         if 'Cache-Control' in response.headers:
-            if 'private' not in response.headers['Cache-Control']:
+            if 'private' not in response.headers['Cache-Control'] and 'public' not in response.headers['Cache-Control']:
                 response.headers['Cache-Control'] = 'private, ' + response.headers['Cache-Control']
         else:
             response.headers['Cache-Control'] = 'private'
