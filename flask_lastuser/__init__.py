@@ -477,7 +477,7 @@ class Lastuser(object):
     # TODO: Map to app user if present. Check with UserManager
     def getuser(self, name):
         result = self._lastuser_api_call(self.getuser_endpoint, name=name)
-        if 'error' in result:
+        if (not result) or ('error' in result) :
             return None
         else:
             return result
@@ -485,7 +485,7 @@ class Lastuser(object):
     # TODO: Map to app user if present. Check with UserManager
     def getuser_by_userid(self, userid):
         result = self._lastuser_api_call(self.getuser_userid_endpoint, userid=userid)
-        if 'error' in result:
+        if (not result) or ('error' in result):
             return None
         else:
             return result
