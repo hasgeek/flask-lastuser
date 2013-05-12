@@ -107,6 +107,10 @@ class UserBase(BaseMixin):
     def profile_url(self):
         return urlparse.urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
 
+    @property
+    def profile_name(self):
+        return self.username or self.userid
+
     def organization_links(self):
         """Links to the user's organizations on the current site."""
         return []
@@ -154,12 +158,44 @@ class ProfileMixin(object):
         return perms
 
     @classmethod
-    def update_from_user(cls, user):
+    def update_from_user(cls, user, session):
         """
         Update profiles from the given user's organizations.
         """
-        # TODO
-        pass
+        idsnames = {user.userid: {'name': user.profile_name, 'title': user.fullname}}
+        for org in user.organizations_owned():
+            idsnames[org['userid']] = {'name': org['name'], 'title': org['title']}
+        namesids = dict([(value['name'], key) for key, value in idsnames.items()])
+
+        # First, check if Profile userids and names match
+        for profile in cls.query.filter(cls.name.in_(namesids.keys())).all():
+            if profile.userid != namesids[profile.name]:
+                # This profile's userid and name don't match. Knock off the name
+                profile.name = profile.userid
+
+        # Flush this to the db for constraint integrity
+        session.flush()
+
+        # Second, check the other way around and keep this list of profiles
+        profiles = dict([(p.userid, p) for p in cls.query.filter(cls.userid.in_(idsnames.keys())).all()])
+        for profile in profiles.values():
+            if profile.name != idsnames[profile.userid]['name']:
+                profile.name = idsnames[profile.userid]['name']
+            if profile.title != idsnames[profile.userid]['title']:
+                profile.title = idsnames[profile.userid]['title']
+
+        # Flush this too
+        session.flush()
+
+        # Third, make new profiles if required
+        if user.userid not in profiles:
+            profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname)
+            session.add(profile)
+
+        for org in user.organizations_memberof():
+            if org['userid'] not in profiles:
+                profile = cls(userid=org['userid'], name=org['name'], title=org['title'])
+                session.add(profile)
 
 
 class UserMigrateMixin(object):
