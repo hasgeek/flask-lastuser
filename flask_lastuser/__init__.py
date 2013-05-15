@@ -155,7 +155,9 @@ class Lastuser(object):
         self.logout_endpoint = app.config.get('LASTUSER_ENDPOINT_LOGOUT', 'logout')
         self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
         self.getuser_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
+        self.getusers_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/getusers')
         self.getuser_userid_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
+        self.getuser_userids_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERIDS', 'api/1/user/get_by_userids')
         self.getorgteams_endpoint = app.config.get('LASTUSER_ENDPOINT_GETORGTEAMS', 'api/1/org/get_teams')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
@@ -424,10 +426,12 @@ class Lastuser(object):
         """
         return urlparse.urljoin(self.lastuser_server, endpoint)
 
-    def _lastuser_api_call(self, endpoint, **kwargs):
-        r = requests.post(self.endpoint_url(endpoint),
-            auth=(self.client_id, self.client_secret),
-            data=kwargs)
+    def _lastuser_api_call(self, endpoint, method='POST', **kwargs):
+        r = {'GET': requests.get,
+            'POST': requests.post}[method](
+                self.endpoint_url(endpoint),
+                auth=(self.client_id, self.client_secret),
+                data=kwargs)
         if r.status_code in (400, 500, 401):
             abort(500)
         elif r.status_code == 200:
@@ -477,10 +481,18 @@ class Lastuser(object):
     # TODO: Map to app user if present. Check with UserManager
     def getuser(self, name):
         result = self._lastuser_api_call(self.getuser_endpoint, name=name)
-        if (not result) or ('error' in result) :
+        if (not result) or ('error' in result):
             return None
         else:
             return result
+
+    # TODO: Map to app users if present. Check with UserManager
+    def getusers(self, names):
+        result = self._lastuser_api_call(self.getusers_endpoint, name=names)
+        if (not result) or ('error' in result):
+            return None
+        else:
+            return result['results']
 
     # TODO: Map to app user if present. Check with UserManager
     def getuser_by_userid(self, userid):
@@ -489,6 +501,14 @@ class Lastuser(object):
             return None
         else:
             return result
+
+    # TODO: Map to app user if present. Check with UserManager
+    def getuser_by_userids(self, userids):
+        result = self._lastuser_api_call(self.getuser_userid_endpoint, userid=userids)
+        if (not result) or ('error' in result):
+            return None
+        else:
+            return result['results']
 
     def external_resource(self, name, endpoint, method):
         """
