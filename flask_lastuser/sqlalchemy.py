@@ -13,7 +13,7 @@ __all__ = ['UserBase', 'TeamBase', 'ProfileMixin', 'UserManager']
 import urlparse
 from flask import g, current_app, json
 from sqlalchemy import Column, Boolean, Integer, String, Unicode, UnicodeText, ForeignKey, Table, UniqueConstraint
-from sqlalchemy.orm import deferred, undefer, relationship
+from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase
 from coaster import getbool
@@ -147,23 +147,41 @@ class ProfileMixin(object):
     """
     ProfileMixin provides methods to assist with creating Profile models (which represent
     both User and Organization models), and keeping them updated as user data changes.
+
+    ProfileMixin does not provide any columns (apart from aliasing userid and buid to
+    each other). Subclasses must provide their own columns including the mandatory name,
+    title and buid or userid.
     """
+    @declared_attr
+    def userid(cls):
+        """Synonym for buid if the model has no existing userid column."""
+        return synonym('buid')
+
+    @declared_attr
+    def buid(cls):
+        """Synonym for userid if the model has no existing buid column."""
+        return synonym('userid')
+
     def permissions(self, user, inherited=None):
-        perms = super(ProfileMixin, self).permissions(user, inherited)
+        parent = super(ProfileMixin, self)
+        if hasattr(parent, 'permissions'):
+            perms = parent.permissions(user, inherited)
+        else:
+            perms = set()
         perms.add('view')
-        if user and self.buid in user.user_organizations_owned_ids():
+        if user and self.userid in user.user_organizations_owned_ids():
             perms.add('edit')
             perms.add('delete')
             perms.add('new')
         return perms
 
     @classmethod
-    def update_from_user(cls, user, session):
+    def update_from_user(cls, user, session, parent=None):
         """
         Update profiles from the given user's organizations.
         """
         idsnames = {user.userid: {'name': user.profile_name, 'title': user.fullname}}
-        for org in user.organizations_owned():
+        for org in user.organizations_memberof():
             idsnames[org['userid']] = {'name': org['name'], 'title': org['title']}
         namesids = dict([(value['name'], key) for key, value in idsnames.items()])
 
@@ -189,12 +207,18 @@ class ProfileMixin(object):
 
         # Third, make new profiles if required
         if user.userid not in profiles:
-            profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname)
+            if parent is not None:
+                profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname, parent=parent)
+            else:
+                profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname)
             session.add(profile)
 
         for org in user.organizations_memberof():
             if org['userid'] not in profiles:
-                profile = cls(userid=org['userid'], name=org['name'], title=org['title'])
+                if parent is not None:
+                    profile = cls(userid=org['userid'], name=org['name'], title=org['title'], parent=parent)
+                else:
+                    profile = cls(userid=org['userid'], name=org['name'], title=org['title'])
                 session.add(profile)
 
 
