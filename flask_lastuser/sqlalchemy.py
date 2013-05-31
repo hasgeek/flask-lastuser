@@ -11,12 +11,14 @@ from __future__ import absolute_import
 __all__ = ['UserBase', 'TeamBase', 'ProfileMixin', 'UserManager']
 
 import urlparse
+from pytz import timezone
+from werkzeug import cached_property
 from flask import g, current_app, json
 from sqlalchemy import Column, Boolean, Integer, String, Unicode, UnicodeText, ForeignKey, Table, UniqueConstraint
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase
-from coaster import getbool
+from coaster import getbool, make_name
 from coaster.sqlalchemy import BaseMixin
 
 
@@ -75,6 +77,15 @@ class UserBase(BaseMixin):
             raise ValueError("userinfo must be a dict")
         self._userinfo_cached = value
         self._userinfo = json.dumps(value)
+
+    @cached_property
+    def timezone(self):
+        return self.userinfo.get('timezone') or current_app.config.get('TIMEZONE')
+
+    @cached_property
+    def tz(self):
+        if self.timezone:
+            return timezone(self.timezone)
 
     def __repr__(self):
         return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
@@ -176,9 +187,20 @@ class ProfileMixin(object):
         return perms
 
     @classmethod
-    def update_from_user(cls, user, session, parent=None):
+    def update_from_user(cls, user, session, parent=None,
+            type_user=None, type_org=None, type_col='type',
+            make_user_profiles=True, make_org_profiles=True):
         """
         Update profiles from the given user's organizations.
+
+        :param user: User account with organization data.
+        :param session: Database session (typically db.session).
+        :param parent: Parent object, if applicable.
+        :param type_user: Type value for user profiles, if applicable.
+        :param type_org: Type value for organization profiles, if applicable.
+        :param type_col: Column for type value, if applicable.
+        :param bool make_user_profiles: Should user profiles be created?
+        :param bool make_org_profiles: Should organization profiles be created?
         """
         idsnames = {user.userid: {'name': user.profile_name, 'title': user.fullname}}
         for org in user.organizations_memberof():
@@ -189,7 +211,8 @@ class ProfileMixin(object):
         for profile in cls.query.filter(cls.name.in_(namesids.keys())).all():
             if profile.userid != namesids[profile.name]:
                 # This profile's userid and name don't match. Knock off the name
-                profile.name = profile.userid
+                profile.name = make_name(profile.userid, maxlength=250,
+                    checkused=lambda c: True if session.query(cls.name).filter_by(name=c).first() else False)
 
         # Flush this to the db for constraint integrity
         session.flush()
@@ -206,20 +229,26 @@ class ProfileMixin(object):
         session.flush()
 
         # Third, make new profiles if required
-        if user.userid not in profiles:
-            if parent is not None:
-                profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname, parent=parent)
-            else:
-                profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname)
-            session.add(profile)
-
-        for org in user.organizations_memberof():
-            if org['userid'] not in profiles:
+        if make_user_profiles:
+            if user.userid not in profiles:
                 if parent is not None:
-                    profile = cls(userid=org['userid'], name=org['name'], title=org['title'], parent=parent)
+                    profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname, parent=parent)
                 else:
-                    profile = cls(userid=org['userid'], name=org['name'], title=org['title'])
+                    profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname)
+                if type_user is not None:
+                    setattr(profile, type_col, type_user)
                 session.add(profile)
+
+        if make_org_profiles:
+            for org in user.organizations_memberof():
+                if org['userid'] not in profiles:
+                    if parent is not None:
+                        profile = cls(userid=org['userid'], name=org['name'], title=org['title'], parent=parent)
+                    else:
+                        profile = cls(userid=org['userid'], name=org['name'], title=org['title'])
+                    if type_org is not None:
+                        setattr(profile, type_col, type_org)
+                    session.add(profile)
 
 
 class UserMigrateMixin(object):
