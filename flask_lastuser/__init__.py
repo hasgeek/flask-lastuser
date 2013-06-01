@@ -437,7 +437,7 @@ class Lastuser(object):
             if result.get('status') == 'ok':
                 userinfo = result['result']
                 user = self.usermanager.load_user_userinfo(userinfo, update=True)
-            f(user, **request.form)
+            f(user)
             return jsonify({'status': 'ok'})
         return decorated_function
 
