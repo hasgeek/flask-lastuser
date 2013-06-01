@@ -10,7 +10,7 @@ import re
 import weakref
 from coaster.views import get_current_url, get_next_url
 
-from flask import session, g, redirect, url_for, request, flash, abort, Response
+from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify
 
 from ._version import *
 
@@ -163,8 +163,10 @@ class Lastuser(object):
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
 
         # Register known external resources provided by Lastuser itself
+        self.external_resource('id', urlparse.urljoin(self.lastuser_server, 'api/1/id'), 'GET')
         self.external_resource('email', urlparse.urljoin(self.lastuser_server, 'api/1/email'), 'GET')
         self.external_resource('email/add', urlparse.urljoin(self.lastuser_server, 'api/1/email/add'), 'POST')
+        self.external_resource('organizations', urlparse.urljoin(self.lastuser_server, 'api/1/organizations'), 'GET')
 
         self.app.before_request(self.before_request)
         self.app.after_request(self.after_request)
@@ -416,8 +418,27 @@ class Lastuser(object):
         resource access tokens and user info changes.
         """
         @wraps(f)
-        def decorated_function(*args, **kw):
-            return f(*args, **kw)
+        def decorated_function():
+            # Step 1. Only accept POST requests
+            if request.method != 'POST':
+                abort(405)
+            # Step 2. request.form should have at least 'user' and 'changes' keys
+            if not ('userid' in request.form and 'changes' in request.form):
+                abort(400)
+            # Step 3. Look up user account locally. It has to exist
+            user = self.usermanager.load_user(request.form['userid'])
+            if not user:
+                abort(400)
+            # Step 4. Ask Lastuser for updated information on this user
+            result = self.call_resource('id', all=1,
+                _token=user.lastuser_token,
+                _token_type=user.lastuser_token_type)
+            # Step 5. Update locally
+            if result.get('status') == 'ok':
+                userinfo = result['result']
+                user = self.usermanager.load_user_userinfo(userinfo, update=True)
+            f(user, **request.form)
+            return jsonify({'status': 'ok'})
         return decorated_function
 
     def endpoint_url(self, endpoint):
