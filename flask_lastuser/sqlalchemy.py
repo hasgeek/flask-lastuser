@@ -231,13 +231,20 @@ class ProfileMixin(object):
         # Third, make new profiles if required
         if make_user_profiles:
             if user.userid not in profiles:
-                if parent is not None:
-                    profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname, parent=parent)
+                old_profile = cls.query.filter_by(lastuser_token=user.lastuser_token).first()
+                if old_profile:
+                    old_profile.userid = user.userid
+                    if type_user is not None:
+                        setattr(old_profile, type_col, type_user)
+                    session.add(old_profile)
                 else:
-                    profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname)
-                if type_user is not None:
-                    setattr(profile, type_col, type_user)
-                session.add(profile)
+                    if parent is not None:
+                        profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname, parent=parent)
+                    else:
+                        profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname)
+                    if type_user is not None:
+                        setattr(profile, type_col, type_user)
+                    session.add(profile)
 
         if make_org_profiles:
             for org in user.organizations_memberof():
