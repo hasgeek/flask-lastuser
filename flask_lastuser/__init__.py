@@ -430,13 +430,7 @@ class Lastuser(object):
             if not user:
                 abort(400)
             # Step 4. Ask Lastuser for updated information on this user
-            result = self.call_resource('id', all=1,
-                _token=user.lastuser_token,
-                _token_type=user.lastuser_token_type)
-            # Step 5. Update locally
-            if result.get('status') == 'ok':
-                userinfo = result['result']
-                user = self.usermanager.load_user_userinfo(userinfo, update=True)
+            user = self.update_user(user)
             f(user)
             return jsonify({'status': 'ok'})
         return decorated_function
@@ -594,6 +588,18 @@ class Lastuser(object):
             return data['org_teams']
         else:
             return {}
+
+    def update_user(self, user):
+        """
+        Update user details from Lastuser.
+        """
+        result = self.call_resource('id', all=1,
+            _token=user.lastuser_token,
+            _token_type=user.lastuser_token_type)
+        if result.get('status') == 'ok':
+            userinfo = result['result']
+            user = self.usermanager.load_user_userinfo(userinfo, update=True)
+        return user
 
 # Compatibility name
 LastUser = Lastuser
