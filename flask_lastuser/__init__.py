@@ -65,7 +65,7 @@ class UserManagerBase(object):
     def make_userinfo(self, user):
         raise NotImplementedError("Not implemented in the base class")
 
-    def load_user_userinfo(self, userinfo):
+    def load_user_userinfo(self, userinfo, token, update=False):
         raise NotImplementedError("Not implemented in the base class")
 
     def before_request(self):
@@ -487,7 +487,7 @@ class Lastuser(object):
                 elif result['status'] == 'ok':
                     # All okay.
                     # If the user is unknown, make a new user. If the user is known, don't update scoped data
-                    g.user = self.usermanager.load_user_userinfo(result['userinfo'], update=False)
+                    g.user = self.usermanager.load_user_userinfo(result['userinfo'], token=None, update=False)
                     g.lastuserinfo = self.usermanager.make_userinfo(g.user)
                     return f(result, *args, **kw)
             return decorated_function
@@ -598,7 +598,7 @@ class Lastuser(object):
             _token_type=user.lastuser_token_type)
         if result.get('status') == 'ok':
             userinfo = result['result']
-            user = self.usermanager.load_user_userinfo(userinfo, update=True)
+            user = self.usermanager.load_user_userinfo(userinfo, token=None, update=True)
         return user
 
 # Compatibility name

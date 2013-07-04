@@ -360,7 +360,7 @@ class UserManager(UserManagerBase):
                         permissions=user.userinfo.get('permissions', ()),
                         organizations=user.userinfo.get('organizations'))
 
-    def load_user_userinfo(self, userinfo, update=False):
+    def load_user_userinfo(self, userinfo, token=None, update=False):
         """
         Load a user and update data from the userinfo.
         """
@@ -376,6 +376,15 @@ class UserManager(UserManagerBase):
             olduser = self.usermodel.query.filter_by(email=userinfo.get('email')).first()
             if olduser is not None and olduser.id != user.id:
                 olduser.email = None
+
+        # Next, watch for lastuser_token conflicts. This can happen when user
+        # accounts are merged and we haven't yet detected that.
+        if token is not None:
+            olduser = self.usermodel.query.filter_by(lastuser_token=token).first()
+            if olduser is not None and olduser.id != user.id:
+                olduser.lastuser_token = None
+                olduser.lastuser_token_type = None
+                olduser.lastuser_token_scope = None
 
         # Flush the changes before updating the current user account
         self.db.session.flush()
@@ -397,7 +406,7 @@ class UserManager(UserManagerBase):
         return user
 
     def login_listener(self, userinfo, token):
-        user = self.load_user_userinfo(userinfo, update=True)
+        user = self.load_user_userinfo(userinfo, token['access_token'], update=True)
         user.lastuser_token = token['access_token']
         user.lastuser_token_type = token['token_type']
         user.lastuser_token_scope = token['scope']
