@@ -218,12 +218,20 @@ class Lastuser(object):
     def has_permission(self, permission):
         """
         Returns True if the current user has the specified permission.
+        
+        :param permission: Permission to check for. If multiple permissions are passed,
+            any of them may match.
+        :type permission: string, list/tuple
         """
-        return permission in self.permissions()
+        if isinstance(permission, (list, tuple)):
+            return bool(set(permission) & set(self.permissions()))
+        else:
+            return permission in self.permissions()
 
     def requires_permission(self, permission):
         """
-        Decorator that checks if the user has a certain permission from Lastuser.
+        Decorator that checks if the user has a certain permission from Lastuser. Uses
+        :meth:`has_permission` to check if the permission is available.
         """
         def inner(f):
             @wraps(f)

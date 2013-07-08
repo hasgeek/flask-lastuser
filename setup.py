@@ -22,7 +22,7 @@ requires = [
 
 setup(
     name='Flask-Lastuser',
-    version='0.3.14',
+    version=version,
     url='https://github.com/hasgeek/flask-lastuser',
     license='BSD',
     author='Kiran Jonnalagadda',
