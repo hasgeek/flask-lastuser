@@ -218,7 +218,7 @@ class Lastuser(object):
     def has_permission(self, permission):
         """
         Returns True if the current user has the specified permission.
-        
+
         :param permission: Permission to check for. If multiple permissions are passed,
             any of them may match.
         :type permission: string, list/tuple
