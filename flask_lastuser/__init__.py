@@ -123,6 +123,19 @@ class UserManagerBase(object):
         else:
             return []
 
+    def user_phones(self, user):
+        """
+        Retrieve all known phone numbers for the given user.
+        """
+        result = self.lastuser.call_resource('phone', all=1,
+            _token=user.lastuser_token,
+            _token_type=user.lastuser_token_type)
+
+        if result.get('status') == 'ok':
+            return result['result']['all']
+        else:
+            return []
+
 
 class Lastuser(object):
     """
@@ -166,6 +179,10 @@ class Lastuser(object):
         self.external_resource('id', urlparse.urljoin(self.lastuser_server, 'api/1/id'), 'GET')
         self.external_resource('email', urlparse.urljoin(self.lastuser_server, 'api/1/email'), 'GET')
         self.external_resource('email/add', urlparse.urljoin(self.lastuser_server, 'api/1/email/add'), 'POST')
+        self.external_resource('email/remove', urlparse.urljoin(self.lastuser_server, 'api/1/email/remove'), 'POST')
+        self.external_resource('phone', urlparse.urljoin(self.lastuser_server, 'api/1/phone'), 'GET')
+        self.external_resource('phone/add', urlparse.urljoin(self.lastuser_server, 'api/1/phone/add'), 'POST')
+        self.external_resource('phone/remove', urlparse.urljoin(self.lastuser_server, 'api/1/phone/remove'), 'POST')
         self.external_resource('organizations', urlparse.urljoin(self.lastuser_server, 'api/1/organizations'), 'GET')
 
         self.app.before_request(self.before_request)

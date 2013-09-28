@@ -19,7 +19,7 @@ from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase
 from coaster import getbool, make_name
-from coaster.sqlalchemy import BaseMixin
+from coaster.sqlalchemy import BaseMixin, JsonDict
 
 
 class UserBase(BaseMixin):
@@ -59,24 +59,8 @@ class UserBase(BaseMixin):
 
     # Userinfo
     @declared_attr
-    def _userinfo(cls):
-        return deferred(Column('userinfo', UnicodeText, nullable=True))
-
-    @property
-    def userinfo(self):
-        if not hasattr(self, '_userinfo_cached'):
-            if not self._userinfo:
-                self._userinfo_cached = {}
-            else:
-                self._userinfo_cached = json.loads(self._userinfo)
-        return self._userinfo_cached
-
-    @userinfo.setter
-    def userinfo(self, value):
-        if not isinstance(value, dict):
-            raise ValueError("userinfo must be a dict")
-        self._userinfo_cached = value
-        self._userinfo = json.dumps(value)
+    def userinfo(cls):
+        return deferred(Column('userinfo', JsonDict, nullable=True))
 
     @cached_property
     def timezone(self):
@@ -86,6 +70,10 @@ class UserBase(BaseMixin):
     def tz(self):
         if self.timezone:
             return timezone(self.timezone)
+
+    @cached_property
+    def phone(self):
+        return self.userinfo.get('phone')
 
     def __repr__(self):
         return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
@@ -339,7 +327,7 @@ class UserManager(UserManagerBase):
     def load_user(self, userid, create=False):
         # TODO: How do we cache this? Connect to a cache manager
         user = self.usermodel.query.filter_by(userid=userid
-            ).options(undefer('_userinfo')).first()
+            ).options(undefer('userinfo')).first()
         if user is None:
             if create:
                 user = self.usermodel(userid=userid)
