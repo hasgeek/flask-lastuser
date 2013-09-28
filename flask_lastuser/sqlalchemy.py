@@ -13,8 +13,8 @@ __all__ = ['UserBase', 'TeamBase', 'ProfileMixin', 'UserManager']
 import urlparse
 from pytz import timezone
 from werkzeug import cached_property
-from flask import g, current_app, json
-from sqlalchemy import Column, Boolean, Integer, String, Unicode, UnicodeText, ForeignKey, Table, UniqueConstraint
+from flask import g, current_app
+from sqlalchemy import Column, Boolean, Integer, String, Unicode, ForeignKey, Table, UniqueConstraint
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase
