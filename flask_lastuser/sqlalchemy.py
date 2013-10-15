@@ -64,7 +64,7 @@ class UserBase(BaseMixin):
 
     @cached_property
     def timezone(self):
-        return self.userinfo.get('timezone') or current_app.config.get('TIMEZONE')
+        return self.userinfo and self.userinfo.get('timezone') or current_app.config.get('TIMEZONE')
 
     @cached_property
     def tz(self):
@@ -73,13 +73,13 @@ class UserBase(BaseMixin):
 
     @cached_property
     def phone(self):
-        return self.userinfo.get('phone')
+        return self.userinfo and self.userinfo.get('phone')
 
     def __repr__(self):
         return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
 
     def organizations_owned(self):
-        if self.userinfo.get('organizations') and 'owner' in self.userinfo['organizations']:
+        if self.userinfo and self.userinfo.get('organizations') and 'owner' in self.userinfo['organizations']:
             return list(self.userinfo['organizations']['owner'])
         else:
             return []
@@ -91,7 +91,7 @@ class UserBase(BaseMixin):
         return [self.userid] + self.organizations_owned_ids()
 
     def organizations_memberof(self):
-        if self.userinfo.get('organizations') and 'member' in self.userinfo['organizations']:
+        if self.userinfo and self.userinfo.get('organizations') and 'member' in self.userinfo['organizations']:
             return list(self.userinfo['organizations']['member'])
         else:
             return []
@@ -345,8 +345,8 @@ class UserManager(UserManagerBase):
                         username=user.username,
                         fullname=user.fullname,
                         email=user.email,
-                        permissions=user.userinfo.get('permissions', ()),
-                        organizations=user.userinfo.get('organizations'))
+                        permissions=user.userinfo.get('permissions', ()) if user.userinfo else (),
+                        organizations=user.userinfo.get('organizations') if user.userinfo else None)
 
     def load_user_userinfo(self, userinfo, token=None, update=False):
         """
