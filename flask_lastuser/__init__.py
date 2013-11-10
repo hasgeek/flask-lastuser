@@ -496,11 +496,14 @@ class Lastuser(object):
                     else:
                         # Unrecognized Authorization header
                         return resource_auth_error(u"A Bearer token is required in the Authorization header.")
-                    if 'access_token' in args:
+                    if 'access_token' in request.args or 'access_token' in request.form:
                         return resource_auth_error(u"Access token specified in both header and body.")
                 else:
-                    # We only accept access_token in the form, not in the query.
-                    token = request.form.get('access_token')
+                    # Checking for access_token in the query
+                    token = request.args.get('access_token')
+                    if not token:
+                        # Checking for access_token in the form
+                        token = request.form.get('access_token')
                     if not token:
                         # No token provided in Authorization header or in request parameters
                         return resource_auth_error(u"An access token is required to access this resource.")
