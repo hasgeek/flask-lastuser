@@ -12,6 +12,7 @@ import requests
 import urllib
 import re
 import weakref
+import simplejson as json
 from coaster.views import get_current_url, get_next_url
 
 from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify
@@ -171,6 +172,7 @@ class Lastuser(object):
         self.auth_endpoint = app.config.get('LASTUSER_ENDPOINT_AUTH', 'auth')
         self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
         self.logout_endpoint = app.config.get('LASTUSER_ENDPOINT_LOGOUT', 'logout')
+        self.syncresources_endpoint = app.config.get('LASTUSER_ENDPOINT_REGISTER_RESOURCE', 'api/1/resource/sync')
         self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
         self.getuser_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
         self.getusers_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/getusers')
@@ -179,6 +181,7 @@ class Lastuser(object):
         self.getorgteams_endpoint = app.config.get('LASTUSER_ENDPOINT_GETORGTEAMS', 'api/1/org/get_teams')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
+        app.lastuser = self
 
         # Register known external resources provided by Lastuser itself
         self.external_resource('id', urlparse.urljoin(self.lastuser_server, 'api/1/id'), 'GET')
@@ -481,6 +484,10 @@ class Lastuser(object):
             abort(500)
         elif r.status_code == 200:
             return r.json() if callable(r.json) else r.json
+
+    def sync_resources(self):
+        result = self._lastuser_api_call(self.syncresources_endpoint, resources=json.dumps(self.resources))
+        return result
 
     def resource_handler(self, name, description=None):
         """
