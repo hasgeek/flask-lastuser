@@ -2,6 +2,10 @@
 
 from __future__ import absolute_import
 from functools import wraps
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 import uuid
 import urlparse
 import requests
@@ -155,6 +159,7 @@ class Lastuser(object):
         self.client_id = None
         self.client_secret = None
 
+        self.resources = OrderedDict()
         self.external_resources = {}
 
         if app is not None:
@@ -477,14 +482,14 @@ class Lastuser(object):
         elif r.status_code == 200:
             return r.json() if callable(r.json) else r.json
 
-    def resource_handler(self, resource_name):
+    def resource_handler(self, name, description=None):
         """
         Decorator for resource handlers. Verifies tokens and passes info on
         the user and calling client.
         """
         def resource_auth_error(message):
             return Response(message, 401,
-                {'WWW-Authenticate': 'Bearer realm="Token Required" scope="%s"' % resource_name})
+                {'WWW-Authenticate': 'Bearer realm="Token Required" scope="%s"' % name})
 
         def inner(f):
             @wraps(f)
@@ -508,7 +513,7 @@ class Lastuser(object):
                         # No token provided in Authorization header or in request parameters
                         return resource_auth_error(u"An access token is required to access this resource.")
 
-                result = self._lastuser_api_call(self.tokenverify_endpoint, resource=resource_name, access_token=token)
+                result = self._lastuser_api_call(self.tokenverify_endpoint, resource=name, access_token=token)
                 # result should be cached temporarily. Maybe in memcache?
                 if result['status'] == 'error':
                     return Response(u"Invalid token.", 403)
@@ -518,6 +523,10 @@ class Lastuser(object):
                     g.user = self.usermanager.load_user_userinfo(result['userinfo'], token=None, update=False)
                     g.lastuserinfo = self.usermanager.make_userinfo(g.user)
                     return f(result, *args, **kw)
+            self.resources[name] = {
+                'name': name,
+                'description': description
+                }
             return decorated_function
         return inner
 
