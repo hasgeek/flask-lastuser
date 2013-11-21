@@ -321,11 +321,14 @@ class Lastuser(object):
                     session.pop('cookies', None)
 
             scope = data.get('scope', 'id')
-            return self._login_handler_internal(scope, next)
+            message = data.get('message') or request.args.get('message')
+            if isinstance(message, unicode):
+                message = message.encode('utf-8')
+            return self._login_handler_internal(scope, next, message)
         self._login_handler = f
         return decorated_function
 
-    def _login_handler_internal(self, scope, next):
+    def _login_handler_internal(self, scope, next, message=None):
         if not self._redirect_uri_name:
             raise LastuserConfigException("No authorization handler defined")
         session['lastuser_state'] = randomstring()
@@ -334,13 +337,13 @@ class Lastuser(object):
         # Discard currently logged in user
         session.pop('lastuser_userid', None)
         return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
-            urllib.urlencode({
-                'response_type': 'code',
-                'client_id': self.client_id,
-                'redirect_uri': session['lastuser_redirect_uri'],
-                'scope': scope,
-                'state': session['lastuser_state'],
-            })))
+            urllib.urlencode([
+                ('client_id', self.client_id),
+                ('response_type', 'code'),
+                ('scope', scope),
+                ('state', session['lastuser_state']),
+                ('redirect_uri', session['lastuser_redirect_uri']),
+                ] + ([('message', message)] if message else []))))
 
     def logout_handler(self, f):
         """
