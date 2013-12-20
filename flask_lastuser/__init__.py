@@ -172,6 +172,7 @@ class Lastuser(object):
         self.getuser_userid_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
         self.getuser_userids_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERIDS', 'api/1/user/get_by_userids')
         self.getorgteams_endpoint = app.config.get('LASTUSER_ENDPOINT_GETORGTEAMS', 'api/1/org/get_teams')
+        self.getuser_autocomplete_endpoint = app.config.get('LASTUSER_ENDPOINT_USER_AUTOCOMPLETE', 'api/1/user/autocomplete')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
 
@@ -547,7 +548,7 @@ class Lastuser(object):
 
     # TODO: Map to app user if present. Check with UserManager
     def getuser_by_userids(self, userids):
-        result = self._lastuser_api_call(self.getuser_userid_endpoint, userid=userids)
+        result = self._lastuser_api_call(self.getuser_userids_endpoint, userid=userids)
         if (not result) or ('error' in result):
             return None
         else:
