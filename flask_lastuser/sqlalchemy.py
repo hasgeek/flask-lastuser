@@ -110,6 +110,13 @@ class UserBase(BaseMixin):
     def profile_name(self):
         return self.username or self.userid
 
+    @property
+    def pickername(self):
+        if self.username:
+            return u"{fullname} (~{username})".format(fullname=self.fullname, username=self.username)
+        else:
+            return self.fullname
+
     def organization_links(self):
         """Links to the user's organizations on the current site."""
         return []
