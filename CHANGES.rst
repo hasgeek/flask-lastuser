@@ -6,6 +6,7 @@
 * requires_permission and has_permission now accept multiple permissions.
 * Userinfo is now stored as a JSON column where available.
 * User.phone now returns the primary verified phone number, if available.
+* User.pickername returns "fullname (~username)" if username is present.
 
 0.3.13
 ------

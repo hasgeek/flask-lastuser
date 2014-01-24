@@ -179,6 +179,7 @@ class Lastuser(object):
         self.getuser_userid_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
         self.getuser_userids_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERIDS', 'api/1/user/get_by_userids')
         self.getorgteams_endpoint = app.config.get('LASTUSER_ENDPOINT_GETORGTEAMS', 'api/1/org/get_teams')
+        self.getuser_autocomplete_endpoint = app.config.get('LASTUSER_ENDPOINT_USER_AUTOCOMPLETE', 'api/1/user/autocomplete')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
         app.lastuser = self
@@ -329,11 +330,14 @@ class Lastuser(object):
                     session.pop('cookies', None)
 
             scope = data.get('scope', 'id')
-            return self._login_handler_internal(scope, next)
+            message = data.get('message') or request.args.get('message')
+            if isinstance(message, unicode):
+                message = message.encode('utf-8')
+            return self._login_handler_internal(scope, next, message)
         self._login_handler = f
         return decorated_function
 
-    def _login_handler_internal(self, scope, next):
+    def _login_handler_internal(self, scope, next, message=None):
         if not self._redirect_uri_name:
             raise LastuserConfigException("No authorization handler defined")
         session['lastuser_state'] = randomstring()
@@ -342,13 +346,13 @@ class Lastuser(object):
         # Discard currently logged in user
         session.pop('lastuser_userid', None)
         return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
-            urllib.urlencode({
-                'response_type': 'code',
-                'client_id': self.client_id,
-                'redirect_uri': session['lastuser_redirect_uri'],
-                'scope': scope,
-                'state': session['lastuser_state'],
-            })))
+            urllib.urlencode([
+                ('client_id', self.client_id),
+                ('response_type', 'code'),
+                ('scope', scope),
+                ('state', session['lastuser_state']),
+                ('redirect_uri', session['lastuser_redirect_uri']),
+                ] + ([('message', message)] if message else []))))
 
     def logout_handler(self, f):
         """
@@ -563,7 +567,7 @@ class Lastuser(object):
 
     # TODO: Map to app user if present. Check with UserManager
     def getuser_by_userids(self, userids):
-        result = self._lastuser_api_call(self.getuser_userid_endpoint, userid=userids)
+        result = self._lastuser_api_call(self.getuser_userids_endpoint, userid=userids)
         if (not result) or ('error' in result):
             return None
         else:
