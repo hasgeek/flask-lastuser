@@ -493,7 +493,7 @@ class Lastuser(object):
         result = self._lastuser_api_call(self.syncresources_endpoint, resources=json.dumps(self.resources))
         return result
 
-    def resource_handler(self, name, description=None):
+    def resource_handler(self, name, description=u"", siteresource=False):
         """
         Decorator for resource handlers. Verifies tokens and passes info on
         the user and calling client.
@@ -536,7 +536,8 @@ class Lastuser(object):
                     return f(result, *args, **kw)
             self.resources[name] = {
                 'name': name,
-                'description': description
+                'description': description,
+                'siteresource': siteresource
                 }
             return decorated_function
         return inner
