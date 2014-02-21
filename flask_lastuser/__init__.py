@@ -162,6 +162,11 @@ class Lastuser(object):
 
     def init_app(self, app):
         self.app = app
+
+        if not hasattr(app, 'extensions'):
+            app.extensions = {}
+        app.extensions['lastuser'] = weakref.proxy(self)
+
         self.lastuser_server = app.config['LASTUSER_SERVER']
         self.auth_endpoint = app.config.get('LASTUSER_ENDPOINT_AUTH', 'auth')
         self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
