@@ -6,7 +6,10 @@ python:
 install:
   - python setup.py install
 # command to run tests
-script: nosetests 
+script:
+  - coverage run `nosetests`
+after_success:
+  - coveralls
 notifications:
   email: false
   irc: "irc.freenode.net#hasgeek-dev"
