@@ -168,6 +168,13 @@ class ProfileMixin(object):
         """Synonym for userid if the model has no existing buid column."""
         return synonym('userid')
 
+    @property
+    def pickername(self):
+        if self.userid == self.name:
+            return self.title
+        else:
+            return u'{title} (~{name})'.format(title=self.title, name=self.name)
+
     def permissions(self, user, inherited=None):
         parent = super(ProfileMixin, self)
         if hasattr(parent, 'permissions'):
