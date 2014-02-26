@@ -19,7 +19,7 @@ from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase
 from coaster import getbool, make_name
-from coaster.sqlalchemy import BaseMixin, JsonDict
+from coaster.sqlalchemy import BaseMixin, JsonDict, BaseNameMixin
 
 
 class UserBase(BaseMixin):
