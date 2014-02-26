@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-    flaskext.lastuser.sqlalchemy
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flask.ext.lastuser.sqlalchemy
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    SQLAlchemy extensions for Flask-Lastuser.
+SQLAlchemy extensions for Flask-Lastuser.
 """
 
 from __future__ import absolute_import
@@ -62,63 +62,87 @@ class UserBase(BaseMixin):
     def userinfo(cls):
         return deferred(Column('userinfo', JsonDict, nullable=True))
 
-    @cached_property
+    @property
     def timezone(self):
+        """The user's timezone as a string"""
         return self.userinfo and self.userinfo.get('timezone') or current_app.config.get('TIMEZONE')
 
+    @property
+    def oldids(self):
+        """List of the user's old userids (after merging accounts in Lastuser)"""
+        return self.userinfo and self.userinfo.get('oldids') or []
+
+    # Use cached_property here because pytz.timezone is relatively slow:
+    #
+    # python -m timeit -s 'from pytz import timezone' 'timezone("Asia/Kolkata")'
+    # 100000 loops, best of 3: 4.07 usec per loop
+    # python -m timeit -s 'from pytz import timezone; tz = {"Asia/Kolkata": timezone("Asia/Kolkata")}; gtz=lambda t: tz[t]'\
+    # 'gtz("Asia/Kolkata")'
+    # 1000000 loops, best of 3: 0.229 usec per loop
     @cached_property
     def tz(self):
+        """The user's timezone as a timezone object"""
         if self.timezone:
             return timezone(self.timezone)
 
-    @cached_property
+    @property
     def phone(self):
+        """The user's phone number, if verified and present in the scope"""
         return self.userinfo and self.userinfo.get('phone')
 
     def __repr__(self):
         return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
 
     def organizations_owned(self):
+        """Organizations owned by this user"""
         if self.userinfo and self.userinfo.get('organizations') and 'owner' in self.userinfo['organizations']:
             return list(self.userinfo['organizations']['owner'])
         else:
             return []
 
     def organizations_owned_ids(self):
+        """Userids of the organizations owned by this user"""
         return [org['userid'] for org in self.organizations_owned()]
 
     def user_organizations_owned_ids(self):
+        """Userids of the user and all the organizations owned by this user"""
         return [self.userid] + self.organizations_owned_ids()
 
     def organizations_memberof(self):
+        """Organizations that this user is a member of"""
         if self.userinfo and self.userinfo.get('organizations') and 'member' in self.userinfo['organizations']:
             return list(self.userinfo['organizations']['member'])
         else:
             return []
 
     def organizations_memberof_ids(self):
+        """Userids of the organizations this user is a member of"""
         return [org['userid'] for org in self.organizations_memberof()]
 
     def user_organization_memberof_ids(self):
+        """Userids of the user and all the organizations the user is a member of"""
         return [self.userid] + self.organizations_memberof_ids()
 
     @property
     def profile_url(self):
+        """URL to the user's profile. Can be overidden by subclasses"""
         return urlparse.urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
 
     @property
     def profile_name(self):
+        """'name' value for the profile linked to this user"""
         return self.username or self.userid
 
     @property
     def pickername(self):
+        """Label name for this user, for identifying them in dropdown lists"""
         if self.username:
             return u"{fullname} (~{username})".format(fullname=self.fullname, username=self.username)
         else:
             return self.fullname
 
     def organization_links(self):
-        """Links to the user's organizations on the current site."""
+        """Links to the user's organizations on the current site"""
         return []
 
     # NOTE: Compatibility definition, please do not use in new code
@@ -156,7 +180,7 @@ class ProfileMixin(object):
 
     ProfileMixin does not provide any columns (apart from aliasing userid and buid to
     each other). Subclasses must provide their own columns including the mandatory name,
-    title and buid or userid.
+    title and buid or userid. Use ProfileBase to get these columns.
     """
     @declared_attr
     def userid(cls):
@@ -193,14 +217,14 @@ class ProfileMixin(object):
             type_user=None, type_org=None, type_col='type',
             make_user_profiles=True, make_org_profiles=True):
         """
-        Update profiles from the given user's organizations.
+        Update profiles from the given user and user's organizations.
 
         :param user: User account with organization data.
         :param session: Database session (typically db.session).
         :param parent: Parent object, if applicable.
         :param type_user: Type value for user profiles, if applicable.
         :param type_org: Type value for organization profiles, if applicable.
-        :param type_col: Column for type value, if applicable.
+        :param unicode type_col: Column for type value, if applicable.
         :param bool make_user_profiles: Should user profiles be created?
         :param bool make_org_profiles: Should organization profiles be created?
         """

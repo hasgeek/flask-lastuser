@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+flask.ext.lastuser
+~~~~~~~~~~~~~~~~~~
+
+Lastuser extension for Flask
+"""
 
 from __future__ import absolute_import
 from functools import wraps
