@@ -253,6 +253,14 @@ class ProfileMixin(object):
                     session.add(profile)
 
 
+
+class ProfileBase(ProfileMixin, BaseNameMixin):
+    """
+    Base class for profiles
+    """
+    userid = Column(Unicode(22), nullable=False, unique=True)
+
+
 class UserMigrateMixin(object):
     """
     UserMigrateMixin provides helper methods to handle user data migration when user
