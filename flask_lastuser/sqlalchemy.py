@@ -34,7 +34,8 @@ class UserBase(BaseMixin):
 
     @declared_attr
     def username(cls):
-        return Column(Unicode(80), unique=True, nullable=True)  # Usernames are optional
+        # Nullable since usernames are optional
+        return Column(Unicode(80), unique=True, nullable=True)
 
     @declared_attr
     def fullname(cls):
@@ -42,34 +43,50 @@ class UserBase(BaseMixin):
 
     @declared_attr
     def email(cls):
-        return Column(Unicode(80), unique=True, nullable=True)  # We may not get an email address
+        # Nullable since we may not get an email address (out of scope or user hasn't verified one)
+        return Column(Unicode(80), unique=True, nullable=True)
 
     # Access token info
     @declared_attr
     def lastuser_token(cls):
+        # Nullable for legacy reasons. Should not be now.
         return Column(String(22), nullable=True, unique=True)
 
     @declared_attr
     def lastuser_token_type(cls):
+        # Nullable for legacy reasons. Should not be now.
         return Column(Unicode(250), nullable=True)
 
     @declared_attr
     def lastuser_token_scope(cls):
+        # Nullable for legacy reasons. Should not be now.
         return Column(Unicode(250), nullable=True)
+
+    @property
+    def access_scope(self):
+        # The "or u''" is required since the field is nullable
+        return (self.lastuser_token_scope or u'').split(' ')
 
     # Userinfo
     @declared_attr
     def userinfo(cls):
+        # Userinfo is transient until we get app-level caching into Flask-Lastuser
         return deferred(Column('userinfo', JsonDict, nullable=True))
 
     @property
     def timezone(self):
         """The user's timezone as a string"""
+        # Stored in userinfo since it was introduced later and a new column
+        # will require migrations in downstream apps.
         return self.userinfo and self.userinfo.get('timezone') or current_app.config.get('TIMEZONE')
 
     @property
     def oldids(self):
         """List of the user's old userids (after merging accounts in Lastuser)"""
+        # Stored in userinfo since it was introduced later and a new column
+        # will require migrations in downstream apps. Also, this is an array
+        # and will require (a) a joined table, (b) Postgres-specific arrays, or (c) data massaging
+        # by joining with spaces, like "access_scope" above.
         return self.userinfo and self.userinfo.get('oldids') or []
 
     # Use cached_property here because pytz.timezone is relatively slow:
@@ -88,6 +105,8 @@ class UserBase(BaseMixin):
     @property
     def phone(self):
         """The user's phone number, if verified and present in the scope"""
+        # Stored in userinfo since it was introduced later and a new column
+        # will require migrations in downstream apps.
         return self.userinfo and self.userinfo.get('phone')
 
     def __repr__(self):

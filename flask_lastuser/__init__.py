@@ -188,14 +188,14 @@ class Lastuser(object):
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
 
         # Register known external resources provided by Lastuser itself
-        self.external_resource('id', urlparse.urljoin(self.lastuser_server, 'api/1/id'), 'GET')
-        self.external_resource('email', urlparse.urljoin(self.lastuser_server, 'api/1/email'), 'GET')
-        self.external_resource('email/add', urlparse.urljoin(self.lastuser_server, 'api/1/email/add'), 'POST')
-        self.external_resource('email/remove', urlparse.urljoin(self.lastuser_server, 'api/1/email/remove'), 'POST')
-        self.external_resource('phone', urlparse.urljoin(self.lastuser_server, 'api/1/phone'), 'GET')
-        self.external_resource('phone/add', urlparse.urljoin(self.lastuser_server, 'api/1/phone/add'), 'POST')
-        self.external_resource('phone/remove', urlparse.urljoin(self.lastuser_server, 'api/1/phone/remove'), 'POST')
-        self.external_resource('organizations', urlparse.urljoin(self.lastuser_server, 'api/1/organizations'), 'GET')
+        self.external_resource('id', self.endpoint_url('api/1/id'), 'GET')
+        self.external_resource('email', self.endpoint_url('api/1/email'), 'GET')
+        self.external_resource('email/add', self.endpoint_url('api/1/email/add'), 'POST')
+        self.external_resource('email/remove', self.endpoint_url('api/1/email/remove'), 'POST')
+        self.external_resource('phone', self.endpoint_url('api/1/phone'), 'GET')
+        self.external_resource('phone/add', self.endpoint_url('api/1/phone/add'), 'POST')
+        self.external_resource('phone/remove', self.endpoint_url('api/1/phone/remove'), 'POST')
+        self.external_resource('organizations', self.endpoint_url('api/1/organizations'), 'GET')
 
         self.app.before_request(self.before_request)
         self.app.after_request(self.after_request)
@@ -210,10 +210,11 @@ class Lastuser(object):
 
     def after_request(self, response):
         """
-        Tell proxies to not publically cache pages.
+        Tell proxies to not publicly cache pages. If you are using Flask-Lastuser,
+        your app takes user logins and pages for a user should not be cached by proxies.
 
         Warning: this will also be applied to static pages if served through your app.
-        Static resources should be served by upstream servers.
+        Static resources should be served by downstream servers without involving Python code.
         """
         if 'Expires' not in response.headers:
             response.headers['Expires'] = 'Fri, 01 Jan 1990 00:00:00 GMT'
