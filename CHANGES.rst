@@ -1,5 +1,5 @@
-0.3.15
-------
+0.4.0
+-----
 
 * Support for merging user accounts in client apps
 
