@@ -267,7 +267,7 @@ def _do_merge_into(instance, other, helper_method=None):
         if model != instance.__class__:
             if helper_method and hasattr(model, helper_method):
                 try:
-                    result = model.migrate_user(olduser=instance, newuser=other)
+                    result = getattr(model, helper_method)(olduser=instance, newuser=other)
                     if isinstance(result, (list, tuple, set)):
                         migrated_tables.update(result)
                     migrated_tables.add(model.__table__.name)
