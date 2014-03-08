@@ -2,3 +2,4 @@ nose
 coverage
 coveralls
 Flask-SQLAlchemy
+HTTPretty

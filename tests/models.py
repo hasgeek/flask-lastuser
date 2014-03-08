@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from coaster.db import db
-from flask.ext.lastuser.sqlalchemy import UserBase, UserMergeMixin, TeamBase, ProfileBase
+from flask.ext.lastuser.sqlalchemy import UserBase2, TeamBase, ProfileBase
 
 
-class User(UserBase, UserMergeMixin, db.Model):
+class User(UserBase2, db.Model):
     __tablename__ = 'user'
 
 

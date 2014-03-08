@@ -21,12 +21,12 @@ from coaster.utils import getbool, make_name, LabeledEnum
 from coaster.sqlalchemy import BaseMixin, JsonDict, BaseNameMixin
 
 
-__all__ = ['UserBase', 'UserMergeMixin', 'TeamBase', 'ProfileMixin', 'UserManager', 'IncompleteUserMigration']
+__all__ = ['UserBase', 'UserBase2', 'TeamBase', 'ProfileMixin', 'UserManager', 'IncompleteUserMigration']
 
 
 class IncompleteUserMigration(Exception):
     """
-    Could not migrate users because of data conflicts
+    Could not migrate users because of data conflicts.
     """
     pass
 
@@ -35,7 +35,7 @@ class USER_STATUS(LabeledEnum):
     ACTIVE = (0, 'Active')        # Currently active
     SUSPENDED = (1, 'Suspended')  # Suspended upstream
     MERGED = (2, 'Merged')        # Merged locally (all data migrated)
-    DELETED = (3, 'Deleted')      # Deleted but record preserved for data
+    DELETED = (3, 'Deleted')      # Deleted but record preserved for foreign key references
 
 
 class UserBase(BaseMixin):
@@ -88,6 +88,22 @@ class UserBase(BaseMixin):
     def userinfo(cls):
         # Userinfo is transient until we get app-level caching into Flask-Lastuser
         return deferred(Column('userinfo', JsonDict, nullable=True))
+
+    @classmethod
+    def get(cls, username=None, userid=None):
+        """
+        Return a User with the given username or userid.
+
+        :param str username: Username to lookup
+        :param str userid: Userid to lookup
+        """
+        if not bool(username) ^ bool(userid):
+            raise TypeError("Either username or userid should be specified")
+
+        if userid:
+            return cls.query.filter_by(userid=userid).one_or_none()
+        else:
+            return cls.query.filter_by(username=username).one_or_none()
 
     @property
     def timezone(self):
@@ -184,7 +200,99 @@ class UserBase(BaseMixin):
     user_organization_owned_ids = user_organizations_owned_ids
 
 
-class UserMergeMixin(object):
+def _do_merge_into(instance, other, helper_method=None):
+
+    assert instance != other
+
+    # User id column (for foreign keys)
+    id_column = instance.__class__.__table__.c.id  # 'id' is from IdMixin via BaseMixin
+    # Session (for queries)
+    session = instance.query.session
+
+    # Keep track of all migrated tables
+    migrated_tables = set()
+    safe_to_remove_instance = True
+
+    # Find the Base class
+    base = instance.__class__
+    while True:
+        goparent = False
+        for cbase in base.__bases__:
+            if hasattr(cbase, 'metadata') and isinstance(cbase.metadata, MetaData):
+                base = cbase
+                goparent = True
+                break
+        if not goparent:
+            break
+
+    def do_migrate_table(table):
+        user_columns = []
+        for column in table.columns:
+            for fkey in column.foreign_keys:
+                if fkey.column is id_column:
+                    # This table needs migration on this column
+                    user_columns.append(column)
+                    break
+
+        # Check for unique constraint on user columns (single or multi-index)
+        # If so, return False
+        for column in user_columns:
+            if column.unique:
+                # XXX: This will fail for secondary relationship tables, which will have a unique index
+                # but no model on which to place helper_method, unless one of the related models handles
+                # migrations AND signals a way for this table to be skipped here. This is why
+                # model.helper_method below returns a list of table names it has processed.
+                return False
+
+        for constraint in table.constraints:
+            if isinstance(constraint, UniqueConstraint):
+                for column in constraint.columns:
+                    if column in user_columns:
+                        # user_id is part of a unique constraint. We can't migrate automatically.
+                        return False
+
+        # TODO: If this table uses Flask-SQLAlchemy's bind_key mechanism, session.execute won't bind
+        # to the correct engine, so the table cannot be migrated. If we attempt to retrieve and connect
+        # to the correct engine, we may lose the transaction. We need to confirm this.
+        if table.info.get('bind_key'):
+            return False
+
+        for column in user_columns:
+            session.execute(table.update().where(column==instance.id).values(**{column.name:other.id}))
+            session.flush()
+        return True
+
+    # Look up all subclasses of this base class
+    for model in base.__subclasses__():
+        if model != instance.__class__:
+            if helper_method and hasattr(model, helper_method):
+                try:
+                    result = model.migrate_user(olduser=instance, newuser=other)
+                    if isinstance(result, (list, tuple, set)):
+                        migrated_tables.update(result)
+                    migrated_tables.add(model.__table__.name)
+                except IncompleteUserMigration:
+                    safe_to_remove_instance = False
+            else:
+                # No model-backed migration. Figure out all foreign key references to user table
+                if not do_migrate_table(model.__table__):
+                    safe_to_remove_instance = False
+                migrated_tables.add(model.__table__.name)
+
+    # Now look in the metadata for any tables we missed
+    for table in base.metadata.tables.values():
+        if table.name not in migrated_tables:
+            if not do_migrate_table(table):
+                safe_to_remove_instance = False
+            migrated_tables.add(table.name)
+
+    return safe_to_remove_instance
+
+
+class StatusMixin(object):
+    """
+    Mixin class providing the status column and helper methods.
+    """
     @declared_attr
     def status(cls):
         return Column(Integer, nullable=False, default=USER_STATUS.ACTIVE)
@@ -210,6 +318,43 @@ class UserMergeMixin(object):
         """
         return self.status == USER_STATUS.MERGED
 
+
+class UserMergeMixin(StatusMixin):
+    """
+    Mixin class adding support for user status and merging. Don't use this mixin
+    directly. Use :class:`UserBase2` or a later base class instead.
+    """
+    @classmethod
+    def get(cls, username=None, userid=None):
+        """
+        Return a User with the given username or userid. Only active users are
+        returned. For merged users, the linked active user is returned.
+
+        :param str username: Username to lookup
+        :param str userid: Userid to lookup
+        """
+        user = super(UserMergeMixin, cls).get(username=username, userid=userid)
+
+        if user and user.status == USER_STATUS.MERGED:
+            user = user.merged_user()
+        if user and user.is_active:
+            return user
+
+    def merged_user(self):
+        """
+        If this account has been merged into another, return that account, else
+        return this. This method queries the upstream Lastuser server since
+        data on merged users is not stored locally in a queryable format (ie,
+        ``user.userinfo['oldids']`` of the other account).
+        """
+        if self.status != USER_STATUS.MERGED:
+            return self
+        lastuser = current_app.extensions.get('lastuser')
+        if lastuser:
+            userdata = lastuser.getuser_by_userid(self.userid)
+            if userdata:
+                return self.get(userid=userdata['userid'])
+
     def merge_into(self, user):
         """
         Merge self into the specified user and relink all 
@@ -217,94 +362,23 @@ class UserMergeMixin(object):
         if self.status == USER_STATUS.MERGED:
             return  # We are already merged, so ignore this call
 
-        assert isinstance(user, UserMergeMixin) and user != self
-        # TODO: Do stuff here
+        safe_to_remove_user = _do_merge_into(self, user, 'migrate_user')
 
-        # User id column (for foreign keys)
-        user_id_column = self.__class__.__table__.c.id  # 'id' is from IdMixin via BaseMixin via UserBase
-        # Session (for queries)
-        session = self.query.session
-
-        # Keep track of all migrated tables
-        migrated_tables = set()
-        safe_to_remove_user = True
-
-        # Find the Base class
-        base = self.__class__
-        while True:
-            goparent = False
-            for cbase in base.__bases__:
-                if hasattr(cbase, 'metadata') and isinstance(cbase.metadata, MetaData):
-                    base = cbase
-                    goparent = True
-                    break
-            if not goparent:
-                break
-
-        def do_migrate_table(table):
-            user_columns = []
-            for column in table.columns:
-                for fkey in column.foreign_keys:
-                    if fkey.column is user_id_column:
-                        # This table needs migration on this column
-                        user_columns.append(column)
-                        break
-                # Check for unique constraint on this column (single or multi-index)
-                # If so, return False
-                if column.unique:
-                    # XXX: This will fail for secondary relationship tables, which will have a unique index
-                    # but no model on which to place migrate_user, unless one of the related models handles
-                    # migrations AND signals a way for this table to be skipped here. This is why 
-                    # model.migrate_user below returns a list of table names it has processed.
-                    return False
-
-            for constraint in table.constraints:
-                if isinstance(constraint, UniqueConstraint):
-                    for column in constraint.columns:
-                        if column in user_columns:
-                            # user_id is part of a unique constraint. We can't migrate automatically.
-                            return False
-
-            # TODO: If this table uses Flask-SQLAlchemy's bind_key mechanism, session.execute won't bind
-            # to the correct engine, so the table cannot be migrated. If we attempt to retrieve and connect
-            # to the correct engine, we may lose the transaction. We need to confirm this.
-            if table.info.get('bind_key'):
-                return False
-
-            for column in user_columns:
-                session.execute(table.update().where(column==self.id).values(**{column.name:user.id}))
-                session.flush()
-            return True
-
-        # Look up all subclasses of this base class
-        for model in base.__subclasses__():
-            if model != self.__class__:
-                if hasattr(model, 'migrate_user'):
-                    try:
-                        result = model.migrate_user(olduser=self, newuser=user)
-                        if isinstance(result, (list, tuple, set)):
-                            migrated_tables.update(result)
-                        migrated_tables.add(model.__table__.name)
-                    except IncompleteUserMigration:
-                        safe_to_remove_user = False
-                else:
-                    # No model-backed migration. Figure out all foreign key references to user table
-                    if not do_migrate_table(model.__table__):
-                        safe_to_remove_user = False
-                    migrated_tables.add(model.__table__.name)
-
-        # Now look in the metadata for any tables we missed
-        for table in base.metadata.tables.values():
-            if table.name not in migrated_tables:
-                if not do_migrate_table(table):
-                    safe_to_remove_user = False
-                migrated_tables.add(table.name)
-
-        # Finally, release claim to username and email (unique properties) and mark self as merged
+        # Release claim to username and email (unique properties) and mark self as merged
         self.username = None
         self.email = None
         if safe_to_remove_user:
             self.status = USER_STATUS.MERGED
+
+        return safe_to_remove_user
+
+
+class UserBase2(UserMergeMixin, UserBase):
+    """
+    Version 2 of UserBase, adding support for user status and merging. Inherits from
+    :class:`UserMergeMixin` and :class:`UserBase`.
+    """
+    pass
 
 
 class TeamBase(BaseMixin):
@@ -340,22 +414,37 @@ class TeamBase(BaseMixin):
         users_teams = cls.metadata.tables['users_teams']
 
         affected_team_ids = set([r.team_id for r in session.query(
-            users_teams.c.team_id).filter_by(user_id=olduser.id).all()])
+            users_teams).filter_by(user_id=olduser.id).all()])
 
         # newuser is already in these teams
         unaffected_team_ids = set([r.team_id for r in session.query(
-            users_teams.c.team_id).filter_by(user_id=newuser.id).all()])
+            users_teams).filter_by(user_id=newuser.id).all()])
 
         migrate_team_ids = affected_team_ids - unaffected_team_ids
         remove_team_ids = affected_team_ids.intersection(unaffected_team_ids)
 
         session.execute(users_teams.update().where(
-            users_teams.c.user_id == olduser.id, users_teams.c.team_id.in_(migrate_team_ids)).values(user_id=newuser.id))
+            users_teams.c.user_id == olduser.id).where(
+                users_teams.c.team_id.in_(migrate_team_ids)).values(user_id=newuser.id))
         session.execute(users_teams.delete(
-            users_teams.c.user_id == olduser.id, users_teams.c.team_id.in_(remove_team_ids)))
+            users_teams.c.user_id == olduser.id).where(
+                users_teams.c.team_id.in_(remove_team_ids)))
 
         # We handled migrations in the users_teams table, so let the caller know
         return ['users_teams']
+
+    @classmethod
+    def get(cls, userid):
+        """
+        Get a Team by its userid.
+        """
+        return cls.query.filter_by(userid=userid).one_or_none()
+
+    def update_from_lastuser(self):
+        """
+        Update information about this team from Lastuser.
+        """
+        pass  # TODO
 
 
 class ProfileMixin(object):
@@ -467,7 +556,7 @@ class ProfileMixin(object):
             if profile:
                 oldprofiles = cls.query.filter(cls.userid.in_(user.oldids)).all()
                 for op in oldprofiles:
-                    op.migrate_to(profile)
+                    op.merge_into(profile)
 
     def update_from_lastuser(self):
         """
@@ -481,7 +570,7 @@ class ProfileMixin(object):
                     # This Profile has gone away. Does the new profile exist here?
                     profile = self.query.filter_by(userid=userinfo['userid']).first()
                     if profile:
-                        self.migrate_to(profile)
+                        self.merge_into(profile)
                     else:
                         # The new profile isn't here yet, so assume their identity
                         self.userid = userinfo['userid']
@@ -492,30 +581,93 @@ class ProfileMixin(object):
                 self.name = userinfo['name']
                 self.title = userinfo['title']
 
+    def merge_into(self, profile):
+        """
+        Move all data from self to the other profile, typically when merging user
+        accounts. Note that ProfileBase.merge_into replaces this method.
+        """
+        assert isinstance(profile, ProfileMixin) and profile != self
 
-    def migrate_to(self, profile):
+        safe_to_remove_profile = _do_merge_into(self, profile, 'migrate_profile')
+
+        # Release claim to name (unique property) and delete self if safe
+        self.name = self.userid
+        if safe_to_remove_profile:
+            self.query.session.remove(self)
+        return safe_to_remove_profile
+
+
+class ProfileColumnMixin(StatusMixin):
+    """
+    Adds :attr:`userid` and :attr:`status` columns and helper methods.
+    """
+    @declared_attr
+    def userid(cls):
+        return Column(Unicode(22), nullable=False, unique=True)
+
+    @classmethod
+    def get(cls, name=None, userid=None):
+        if not bool(name) ^ bool(userid):
+            raise TypeError("Either name or userid should be specified")
+
+        if userid:
+            profile = cls.query.filter_by(userid=userid, status=USER_STATUS.ACTIVE).one_or_none()
+        else:
+            profile = cls.query.filter_by(name=name, status=USER_STATUS.ACTIVE).one_or_none()
+
+        if profile.is_merged:
+            profile = profile.merged_profile()
+        if profile.is_active:
+            return profile
+
+    def merged_profile(self):
+        """
+        If this profile has been merged into another, return that profile, else
+        return this. This method queries the upstream Lastuser server since
+        data on merged profiles is not stored locally in a queryable format (ie,
+        ``user.userinfo['oldids']`` of the other profile's user).
+        """
+        if self.status != USER_STATUS.MERGED:
+            return self
+        lastuser = current_app.extensions.get('lastuser')
+        if lastuser:
+            userdata = lastuser.getuser_by_userid(self.userid)
+            if userdata:
+                return self.get(userid=userdata['userid'])
+
+    def merge_into(self, profile):
         """
         Move all data from self to the other profile, typically when merging user accounts
         """
-        pass
-        # TODO
-        # Uncomment after implementation of details:
-        # session.delete(self)
+        if self.status == USER_STATUS.MERGED:
+            return
+
+        assert isinstance(profile, ProfileMixin) and profile != self
+
+        safe_to_remove_profile = _do_merge_into(self, profile, 'migrate_profile')
+
+        # Release claim to name (unique property) and mark self as merged
+        self.name = self.userid
+        if safe_to_remove_profile:
+            self.status = USER_STATUS.MERGED
+        return safe_to_remove_profile
 
 
-class ProfileBase(ProfileMixin, BaseNameMixin):
+class ProfileBase(ProfileColumnMixin, ProfileMixin, BaseNameMixin):
     """
     Base class for profiles
     """
-    userid = Column(Unicode(22), nullable=False, unique=True)
-    status = Column(Integer, nullable=False, default=USER_STATUS.ACTIVE)
+    pass
 
 
 def make_user_team_table(base):
-    return Table('users_teams', base.metadata,
-        Column('user_id', Integer, ForeignKey('user.id')),
-        Column('team_id', Integer, ForeignKey('team.id'))
-        )
+    if 'users_teams' in base.metadata.tables:
+        return base.metadata.tables['users_teams']
+    else:
+        return Table('users_teams', base.metadata,
+            Column('user_id', Integer, ForeignKey('user.id')),
+            Column('team_id', Integer, ForeignKey('team.id'))
+            )
 
 
 class UserManager(UserManagerBase):
@@ -553,7 +705,7 @@ class UserManager(UserManagerBase):
                         permissions=user.userinfo.get('permissions', ()) if user.userinfo else (),
                         organizations=user.userinfo.get('organizations') if user.userinfo else None)
 
-    def load_user_userinfo(self, userinfo, token=None, update=False):
+    def load_user_userinfo(self, userinfo, access_token=None, update=False):
         """
         Load a user and update data from the userinfo.
         """
@@ -572,8 +724,8 @@ class UserManager(UserManagerBase):
 
         # Next, watch for lastuser_token conflicts. This can happen when user
         # accounts are merged and we haven't yet detected that.
-        if token is not None:
-            olduser = self.usermodel.query.filter_by(lastuser_token=token).first()
+        if access_token is not None:
+            olduser = self.usermodel.query.filter_by(lastuser_token=access_token).first()
             if olduser is not None and olduser.id != user.id:
                 olduser.lastuser_token = None
                 olduser.lastuser_token_type = None
