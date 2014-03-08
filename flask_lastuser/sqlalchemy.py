@@ -31,6 +31,7 @@ class IncompleteUserMigration(Exception):
     pass
 
 
+# XXX: How do we do i18n here? There's nowhere to import __ from
 class USER_STATUS(LabeledEnum):
     ACTIVE = (0, 'Active')        # Currently active
     SUSPENDED = (1, 'Suspended')  # Suspended upstream
@@ -226,28 +227,31 @@ def _do_merge_into(instance, other, helper_method=None):
             break
 
     def do_migrate_table(table):
-        user_columns = []
+        target_columns = []
         for column in table.columns:
             for fkey in column.foreign_keys:
                 if fkey.column is id_column:
                     # This table needs migration on this column
-                    user_columns.append(column)
+                    target_columns.append(column)
                     break
 
         # Check for unique constraint on user columns (single or multi-index)
         # If so, return False
-        for column in user_columns:
+        for column in target_columns:
             if column.unique:
-                # XXX: This will fail for secondary relationship tables, which will have a unique index
-                # but no model on which to place helper_method, unless one of the related models handles
-                # migrations AND signals a way for this table to be skipped here. This is why
-                # model.helper_method below returns a list of table names it has processed.
+                # XXX: This will fail for secondary relationship tables, which
+                # will have a unique index but no model on which to place
+                # helper_method, unless one of the related models handles
+                # migrations AND signals a way for this table to be skipped
+                # here. This is why model.helper_method below (migrate_user or
+                # migrate_profile) returns a list of table names it has
+                # processed.
                 return False
 
         for constraint in table.constraints:
             if isinstance(constraint, UniqueConstraint):
                 for column in constraint.columns:
-                    if column in user_columns:
+                    if column in target_columns:
                         # user_id is part of a unique constraint. We can't migrate automatically.
                         return False
 
@@ -257,7 +261,7 @@ def _do_merge_into(instance, other, helper_method=None):
         if table.info.get('bind_key'):
             return False
 
-        for column in user_columns:
+        for column in target_columns:
             session.execute(table.update().where(column==instance.id).values(**{column.name:other.id}))
             session.flush()
         return True

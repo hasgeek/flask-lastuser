@@ -38,20 +38,20 @@ class TestMergeUserData(unittest.TestCase):
         user1 = User(userid=u"1234567890123456789012", username=u"user1", fullname=u"User 1",
             email=u'user1@example.com',
             userinfo={
-                'timezone': 'Asia/Kolkata',
-                'organizations': {
-                    'member': [
+                u'timezone': u'Asia/Kolkata',
+                u'organizations': {
+                    u'member': [
                         {
-                            'userid': 'qazwsxedcrfvtgbyhnujmi',
-                            'name': 'org1',
-                            'title': 'Organization 1',
+                            u'userid': u'qazwsxedcrfvtgbyhnujmi',
+                            u'name': u'org1',
+                            u'title': u'Organization 1',
                             },
                         ],
-                    'owner': [
+                    u'owner': [
                         {
-                            'userid': 'qazwsxedcrfvtgbyhnujmi',
-                            'name': 'org1',
-                            'title': 'Organization 1',
+                            u'userid': u'qazwsxedcrfvtgbyhnujmi',
+                            u'name': u'org1',
+                            u'title': u'Organization 1',
                             },
                         ]
                     }
@@ -59,25 +59,25 @@ class TestMergeUserData(unittest.TestCase):
         user2 = User(userid=u"0987654321098765432109", username=u"user2", fullname=u"User 2",
             email=u'user2@example.com',
             userinfo={
-                'timezone': 'Asia/Kolkata',
-                'organizations': {
-                    'member': [
+                u'timezone': u'Asia/Kolkata',
+                u'organizations': {
+                    u'member': [
                         {
-                            'userid': 'qwertyuiopasdfghjklzxc',
-                            'name': 'org2',
-                            'title': 'Organization 2',
+                            u'userid': u'qwertyuiopasdfghjklzxc',
+                            u'name': u'org2',
+                            u'title': u'Organization 2',
                             },
                         {
-                            'userid': 'mnbvcxzlkjhgfdsapoiuyt',
-                            'name': 'org3',
-                            'title': 'Organization 3',
+                            u'userid': u'mnbvcxzlkjhgfdsapoiuyt',
+                            u'name': u'org3',
+                            u'title': u'Organization 3',
                             },
                         ],
-                    'owner': [
+                    u'owner': [
                         {
-                            'userid': 'qwertyuiopasdfghjklzxc',
-                            'name': 'org2',
-                            'title': 'Organization 2',
+                            u'userid': u'qwertyuiopasdfghjklzxc',
+                            u'name': u'org2',
+                            u'title': u'Organization 2',
                             },
                         {
                             'userid': 'mnbvcxzlkjhgfdsapoiuyt',
@@ -90,30 +90,30 @@ class TestMergeUserData(unittest.TestCase):
         user3 = User(userid=u"1234567890987654321234", username=u"user3", fullname=u"User 3",
             email=u'user3@example.com',
             userinfo={
-                'timezone': 'Asia/Kolkata',
-                'organizations': {
-                    'member': [
+                u'timezone': 'Asia/Kolkata',
+                u'organizations': {
+                    u'member': [
                         {
-                            'userid': 'mnbvcxzlkjhgfdsapoiuyt',
-                            'name': 'org3',
-                            'title': 'Organization 3',
+                            u'userid': u'mnbvcxzlkjhgfdsapoiuyt',
+                            u'name': u'org3',
+                            u'title': u'Organization 3',
                             },
                         {
-                            'userid': 'qazwsxedcrfvtgbyhnujmi',
-                            'name': 'org1',
-                            'title': 'Organization 1',
+                            u'userid': u'qazwsxedcrfvtgbyhnujmi',
+                            u'name': u'org1',
+                            u'title': u'Organization 1',
                             },
                         ],
-                    'owner': [
+                    u'owner': [
                         {
-                            'userid': 'mnbvcxzlkjhgfdsapoiuyt',
-                            'name': 'org3',
-                            'title': 'Organization 3',
+                            u'userid': u'mnbvcxzlkjhgfdsapoiuyt',
+                            u'name': u'org3',
+                            u'title': u'Organization 3',
                             },
                         {
-                            'userid': 'qazwsxedcrfvtgbyhnujmi',
-                            'name': 'org1',
-                            'title': 'Organization 1',
+                            u'userid': u'qazwsxedcrfvtgbyhnujmi',
+                            u'name': u'org1',
+                            u'title': u'Organization 1',
                             },
                         ]
                     }
