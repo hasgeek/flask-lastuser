@@ -181,7 +181,6 @@ class Lastuser(object):
         self.getuser_autocomplete_endpoint = app.config.get('LASTUSER_ENDPOINT_USER_AUTOCOMPLETE', 'api/1/user/autocomplete')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
-        app.lastuser = self
 
         # Register known external resources provided by Lastuser itself
         self.external_resource('id', urlparse.urljoin(self.lastuser_server, 'api/1/id'), 'GET')
