@@ -235,8 +235,8 @@ def _do_merge_into(instance, other, helper_method=None):
                     target_columns.append(column)
                     break
 
-        # Check for unique constraint on user columns (single or multi-index)
-        # If so, return False
+        # Check for unique constraint on instance id columns (single or multi-index)
+        # If so, return False (migration incomplete)
         for column in target_columns:
             if column.unique:
                 # XXX: This will fail for secondary relationship tables, which
@@ -248,11 +248,13 @@ def _do_merge_into(instance, other, helper_method=None):
                 # processed.
                 return False
 
+        # Now check for multi-column indexes
         for constraint in table.constraints:
             if isinstance(constraint, UniqueConstraint):
                 for column in constraint.columns:
                     if column in target_columns:
-                        # user_id is part of a unique constraint. We can't migrate automatically.
+                        # The target column (typically user_id) is part of a
+                        # unique constraint. We can't migrate automatically.
                         return False
 
         # TODO: If this table uses Flask-SQLAlchemy's bind_key mechanism, session.execute won't bind
@@ -262,8 +264,10 @@ def _do_merge_into(instance, other, helper_method=None):
             return False
 
         for column in target_columns:
-            session.execute(table.update().where(column==instance.id).values(**{column.name:other.id}))
+            session.execute(table.update().where(column==instance.id).values(**{column.name: other.id}))
             session.flush()
+
+        # All done, table successfully migrated. Hurrah!
         return True
 
     # Look up all subclasses of this base class
@@ -271,7 +275,7 @@ def _do_merge_into(instance, other, helper_method=None):
         if model != instance.__class__:
             if helper_method and hasattr(model, helper_method):
                 try:
-                    result = getattr(model, helper_method)(olduser=instance, newuser=other)
+                    result = getattr(model, helper_method)(instance, other)
                     if isinstance(result, (list, tuple, set)):
                         migrated_tables.update(result)
                     migrated_tables.add(model.__table__.name)
@@ -562,29 +566,6 @@ class ProfileMixin(object):
                 for op in oldprofiles:
                     op.merge_into(profile)
 
-    def update_from_lastuser(self):
-        """
-        Query Lastuser for current details of this userid and update as necessary.
-        """
-        lastuser = current_app.extensions.get('lastuser')
-        if lastuser:
-            userinfo = lastuser.getuser_by_userid(self.userid)
-            if userinfo:
-                if userinfo['userid'] != self.userid and self.userid in userinfo.get('oldids', []):
-                    # This Profile has gone away. Does the new profile exist here?
-                    profile = self.query.filter_by(userid=userinfo['userid']).first()
-                    if profile:
-                        self.merge_into(profile)
-                    else:
-                        # The new profile isn't here yet, so assume their identity
-                        self.userid = userinfo['userid']
-                moveprofile = self.query.filter_by(name=userinfo['name']).first()
-                if moveprofile and moveprofile != self:
-                    # There's another profile holding our desired name. Move it out of the way
-                    moveprofile.name = moveprofile.userid
-                self.name = userinfo['name']
-                self.title = userinfo['title']
-
     def merge_into(self, profile):
         """
         Move all data from self to the other profile, typically when merging user
@@ -638,6 +619,33 @@ class ProfileColumnMixin(StatusMixin):
             userdata = lastuser.getuser_by_userid(self.userid)
             if userdata:
                 return self.get(userid=userdata['userid'])
+
+    def update_from_lastuser(self):
+        """
+        Query Lastuser for current details of this userid and update as necessary.
+        """
+        lastuser = current_app.extensions.get('lastuser')
+        if lastuser:
+            userinfo = lastuser.getuser_by_userid(self.userid)
+            if userinfo:
+                if userinfo['userid'] != self.userid and self.userid in userinfo.get('oldids', []):
+                    # This Profile has gone away. Does the new profile exist here?
+                    profile = self.query.filter_by(userid=userinfo['userid']).first()
+                    if profile:
+                        self.merge_into(profile)
+                    else:
+                        # The new profile isn't here yet, so assume their identity
+                        self.userid = userinfo['userid']
+                moveprofile = self.query.filter_by(name=userinfo['name']).first()
+                if moveprofile and moveprofile != self:
+                    # There's another profile holding our desired name. Move it out of the way
+                    moveprofile.name = moveprofile.userid
+                self.name = userinfo['name']
+                self.title = userinfo['title']
+            else:
+                # Lastuser was unreachable or doesn't know about us anymore (FIXME: find out which)
+                self.status = USER_STATUS.DELETED
+                
 
     def merge_into(self, profile):
         """
