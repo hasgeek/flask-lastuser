@@ -2,20 +2,19 @@
 
 from __future__ import absolute_import
 from functools import wraps
-try:
-    from collections import OrderedDict
-except ImportError:
-    from ordereddict import OrderedDict
 import uuid
 import urlparse
 import requests
 import urllib
 import re
 import weakref
-import simplejson as json
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 from coaster.views import get_current_url, get_next_url
 
-from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify
+from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json
 
 from ._version import *
 
@@ -490,8 +489,7 @@ class Lastuser(object):
             return r.json() if callable(r.json) else r.json
 
     def sync_resources(self):
-        result = self._lastuser_api_call(self.syncresources_endpoint, resources=json.dumps(self.resources))
-        return result
+        return self._lastuser_api_call(self.syncresources_endpoint, resources=json.dumps(self.resources))
 
     def resource_handler(self, name, description=u"", siteresource=False):
         """
@@ -512,14 +510,11 @@ class Lastuser(object):
                     else:
                         # Unrecognized Authorization header
                         return resource_auth_error(u"A Bearer token is required in the Authorization header.")
-                    if 'access_token' in request.args or 'access_token' in request.form:
+                    if 'access_token' in request.values:
                         return resource_auth_error(u"Access token specified in both header and body.")
                 else:
-                    # Checking for access_token in the query
-                    token = request.args.get('access_token')
-                    if not token:
-                        # Checking for access_token in the form
-                        token = request.form.get('access_token')
+                    # Is there an access token in the form or query?
+                    token = request.values.get('access_token')
                     if not token:
                         # No token provided in Authorization header or in request parameters
                         return resource_auth_error(u"An access token is required to access this resource.")
