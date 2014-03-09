@@ -14,9 +14,13 @@ import requests
 import urllib
 import re
 import weakref
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 from coaster.views import get_current_url, get_next_url
 
-from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify
+from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json
 
 from ._version import *
 
@@ -164,6 +168,7 @@ class Lastuser(object):
         self.client_id = None
         self.client_secret = None
 
+        self.resources = OrderedDict()
         self.external_resources = {}
 
         if app is not None:
@@ -180,6 +185,7 @@ class Lastuser(object):
         self.auth_endpoint = app.config.get('LASTUSER_ENDPOINT_AUTH', 'auth')
         self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
         self.logout_endpoint = app.config.get('LASTUSER_ENDPOINT_LOGOUT', 'logout')
+        self.syncresources_endpoint = app.config.get('LASTUSER_ENDPOINT_REGISTER_RESOURCE', 'api/1/resource/sync')
         self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
         self.getuser_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
         self.getusers_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/getusers')
@@ -496,14 +502,17 @@ class Lastuser(object):
         elif r.status_code == 200:
             return r.json() if callable(r.json) else r.json
 
-    def resource_handler(self, resource_name):
+    def sync_resources(self):
+        return self._lastuser_api_call(self.syncresources_endpoint, resources=json.dumps(self.resources))
+
+    def resource_handler(self, name, description=u"", siteresource=False):
         """
         Decorator for resource handlers. Verifies tokens and passes info on
         the user and calling client.
         """
         def resource_auth_error(message):
             return Response(message, 401,
-                {'WWW-Authenticate': 'Bearer realm="Token Required" scope="%s"' % resource_name})
+                {'WWW-Authenticate': 'Bearer realm="Token Required" scope="%s"' % name})
 
         def inner(f):
             @wraps(f)
@@ -515,16 +524,16 @@ class Lastuser(object):
                     else:
                         # Unrecognized Authorization header
                         return resource_auth_error(u"A Bearer token is required in the Authorization header.")
-                    if 'access_token' in args:
+                    if 'access_token' in request.values:
                         return resource_auth_error(u"Access token specified in both header and body.")
                 else:
-                    # We only accept access_token in the form, not in the query.
-                    token = request.form.get('access_token')
+                    # Is there an access token in the form or query?
+                    token = request.values.get('access_token')
                     if not token:
                         # No token provided in Authorization header or in request parameters
                         return resource_auth_error(u"An access token is required to access this resource.")
 
-                result = self._lastuser_api_call(self.tokenverify_endpoint, resource=resource_name, access_token=token)
+                result = self._lastuser_api_call(self.tokenverify_endpoint, resource=name, access_token=token)
                 # result should be cached temporarily. Maybe in memcache?
                 if result['status'] == 'error':
                     return Response(u"Invalid token.", 403)
@@ -534,6 +543,11 @@ class Lastuser(object):
                     g.user = self.usermanager.load_user_userinfo(result['userinfo'], token=None, update=False)
                     g.lastuserinfo = self.usermanager.make_userinfo(g.user)
                     return f(result, *args, **kw)
+            self.resources[name] = {
+                'name': name,
+                'description': description,
+                'siteresource': siteresource
+                }
             return decorated_function
         return inner
 
