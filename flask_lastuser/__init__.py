@@ -79,7 +79,7 @@ class UserManagerBase(object):
         Listener that is called at the start of each request. Responsible for
         setting g.user and g.lastuserinfo
         """
-        if session.get('lastuser_userid'):
+        if 'lastuser_userid' in session:
             user = self.load_user(session['lastuser_userid'])
             if user is None:
                 # We'll get here if one of two things happens:
@@ -90,7 +90,7 @@ class UserManagerBase(object):
                 userdata = self.lastuser.getuser_by_userid(session['lastuser_userid'])
                 if userdata and userdata.get('type') == 'user':
                     # This is an actual user. Make an account
-                    user = self.load_user(session['lastuser_userid'], create=True)
+                    user = self.load_user(userdata['userid'], create=True)
                     user.username = userdata['name']
                     user.fullname = userdata['title']
                     olduser = self.load_user_by_username(userdata['name'])
@@ -106,6 +106,9 @@ class UserManagerBase(object):
         g.user = user
         if user:
             g.lastuserinfo = self.make_userinfo(user)
+            if session['lastuser_userid'] != user.userid:
+                # Merged account loaded. Switch over
+                session['lastuser_userid'] = user.userid
         else:
             g.lastuserinfo = None
 
@@ -639,7 +642,8 @@ class Lastuser(object):
             _token_type=user.lastuser_token_type)
         if result.get('status') == 'ok':
             userinfo = result['result']
-            user = self.usermanager.load_user_userinfo(userinfo, token=None, update=True)
+            user = self.usermanager.load_user_userinfo(userinfo, access_token=None, update=True)
+            user.merge_accounts()
         return user
 
 # Compatibility name

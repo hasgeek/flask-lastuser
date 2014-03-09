@@ -91,7 +91,7 @@ class UserBase(BaseMixin):
         return deferred(Column('userinfo', JsonDict, nullable=True))
 
     @classmethod
-    def get(cls, username=None, userid=None):
+    def get(cls, username=None, userid=None, defercols=True):
         """
         Return a User with the given username or userid.
 
@@ -102,9 +102,12 @@ class UserBase(BaseMixin):
             raise TypeError("Either username or userid should be specified")
 
         if userid:
-            return cls.query.filter_by(userid=userid).one_or_none()
+            query = cls.query.filter_by(userid=userid)
         else:
-            return cls.query.filter_by(username=username).one_or_none()
+            query = cls.query.filter_by(username=username)
+        if not defercols:
+            query = query.options(undefer('userinfo'))
+        return query.one_or_none()
 
     @property
     def timezone(self):
@@ -144,6 +147,12 @@ class UserBase(BaseMixin):
 
     def __repr__(self):
         return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
+
+    def merge_accounts(self):
+        """
+        Do nothing. Implemented from UserBase2 onwards.
+        """
+        pass
 
     def organizations_owned(self):
         """Organizations owned by this user"""
@@ -246,6 +255,7 @@ def _do_merge_into(instance, other, helper_method=None):
                 # here. This is why model.helper_method below (migrate_user or
                 # migrate_profile) returns a list of table names it has
                 # processed.
+                current_app.logger.debug("do_migrate_table interrupted because column is unique: %s" % column)
                 return False
 
         # Now check for multi-column indexes
@@ -255,12 +265,15 @@ def _do_merge_into(instance, other, helper_method=None):
                     if column in target_columns:
                         # The target column (typically user_id) is part of a
                         # unique constraint. We can't migrate automatically.
+                        current_app.logger.debug(
+                            "do_migrate_table interrupted because column is part of a unique constraint: %s" % column)
                         return False
 
         # TODO: If this table uses Flask-SQLAlchemy's bind_key mechanism, session.execute won't bind
         # to the correct engine, so the table cannot be migrated. If we attempt to retrieve and connect
         # to the correct engine, we may lose the transaction. We need to confirm this.
         if table.info.get('bind_key'):
+            current_app.logger.debug("do_migrate_table interrupted because table has bind_key: %s" % table.name)
             return False
 
         for column in target_columns:
@@ -276,11 +289,14 @@ def _do_merge_into(instance, other, helper_method=None):
             if helper_method and hasattr(model, helper_method):
                 try:
                     result = getattr(model, helper_method)(instance, other)
+                    session.flush()
                     if isinstance(result, (list, tuple, set)):
                         migrated_tables.update(result)
                     migrated_tables.add(model.__table__.name)
                 except IncompleteUserMigration:
                     safe_to_remove_instance = False
+                    current_app.logger.debug(
+                        "_do_merge_into interrupted because IncompleteUserMigration raised by %s" % model)
             else:
                 # No model-backed migration. Figure out all foreign key references to user table
                 if not do_migrate_table(model.__table__):
@@ -333,7 +349,7 @@ class UserMergeMixin(StatusMixin):
     directly. Use :class:`UserBase2` or a later base class instead.
     """
     @classmethod
-    def get(cls, username=None, userid=None):
+    def get(cls, username=None, userid=None, defercols=True):
         """
         Return a User with the given username or userid. Only active users are
         returned. For merged users, the linked active user is returned.
@@ -341,7 +357,7 @@ class UserMergeMixin(StatusMixin):
         :param str username: Username to lookup
         :param str userid: Userid to lookup
         """
-        user = super(UserMergeMixin, cls).get(username=username, userid=userid)
+        user = super(UserMergeMixin, cls).get(username=username, userid=userid, defercols=defercols)
 
         if user and user.status == USER_STATUS.MERGED:
             user = user.merged_user()
@@ -363,11 +379,18 @@ class UserMergeMixin(StatusMixin):
             if userdata:
                 return self.get(userid=userdata['userid'])
 
+    def merge_accounts(self):
+        if self.oldids:
+            for olduser in self.__class__.query.filter(self.__class__.userid.in_(self.oldids)).all():
+                olduser.merge_into(self)
+
     def merge_into(self, user):
         """
         Merge self into the specified user and relink all 
         """
+        current_app.logger.debug("Preparing to merge %s into %s." % (self, user))
         if self.status == USER_STATUS.MERGED:
+            current_app.logger.debug("Ignoring merge request because we are already merged.")
             return  # We are already merged, so ignore this call
 
         safe_to_remove_user = _do_merge_into(self, user, 'migrate_user')
@@ -377,7 +400,9 @@ class UserMergeMixin(StatusMixin):
         self.email = None
         if safe_to_remove_user:
             self.status = USER_STATUS.MERGED
+            current_app.logger.debug("%s is now merged" % self)
 
+        current_app.logger.debug("Safe to remove %s: %s" % (self, safe_to_remove_user))
         return safe_to_remove_user
 
 
@@ -695,8 +720,11 @@ class UserManager(UserManagerBase):
 
     def load_user(self, userid, create=False):
         # TODO: How do we cache this? Connect to a cache manager
-        user = self.usermodel.query.filter_by(userid=userid
-            ).options(undefer('userinfo')).first()
+        if hasattr(self.usermodel, 'get'):
+            user = self.usermodel.get(userid=userid, defercols=False)
+        else:
+            user = self.usermodel.query.filter_by(userid=userid
+                ).options(undefer('userinfo')).one_or_none()
         if user is None:
             if create:
                 user = self.usermodel(userid=userid)
@@ -704,7 +732,10 @@ class UserManager(UserManagerBase):
         return user
 
     def load_user_by_username(self, username):
-        return self.usermodel.query.filter_by(username=username).first()
+        if hasattr(self.usermodel, 'get'):
+            return self.usermodel.get(username=username)
+        else:
+            return self.usermodel.query.filter_by(username=username).first()
 
     def make_userinfo(self, user):
         return UserInfo(token=user.lastuser_token,
