@@ -116,6 +116,9 @@ class UserManagerBase(object):
         else:
             g.lastuserinfo = None
 
+        # This will be set to True by the various login_required handlers downstream
+        g.login_required = False
+
     def login_listener(self, userinfo, token):
         """
         Listener that is called when a user logs in. ``userinfo`` and ``token``
@@ -240,6 +243,7 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            g.login_required = True
             if g.lastuserinfo is None:
                 if not self._login_handler:
                     abort(403)
@@ -275,6 +279,7 @@ class Lastuser(object):
         def inner(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
+                g.login_required = True
                 if g.lastuserinfo is None:
                     if not self._login_handler:
                         abort(403)
@@ -294,6 +299,7 @@ class Lastuser(object):
         def inner(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
+                g.login_required = True
                 # If the user's not logged in, log them in
                 if g.lastuserinfo is None:
                     if not self._login_handler:
@@ -318,6 +324,7 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            g.login_required = True
             data = f(*args, **kwargs)
             if 'cookietest' in request.args:
                 next = get_next_url()
@@ -373,6 +380,7 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            g.login_required = True
             next = f(*args, **kwargs)
             g.lastuserinfo = None
             session.pop('lastuser_userid', None)
@@ -391,6 +399,7 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kw):
+            g.login_required = True
             # Step 1: Validations
             # Validation 1: Check if there is an error handler
             if not self._auth_error_handler:
