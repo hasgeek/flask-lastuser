@@ -513,7 +513,9 @@ class ProfileMixin(object):
         else:
             perms = set()
         perms.add('view')
-        if user and self.userid in user.user_organizations_owned_ids():
+        if user and (
+                self.userid in user.user_organizations_owned_ids() or
+                self.userid in user.oldids):
             perms.add('edit')
             perms.add('delete')
             perms.add('new')
@@ -806,6 +808,8 @@ class UserManager(UserManagerBase):
 
         # TODO: Syncing the list of teams is an org-level operation, not a user-level operation.
         # Move it out of here as there's a higher likelihood of database conflicts
+
+        # TODO: Move this to Team.update_from_lastuser or somewhere similar
         if self.teammodel:
             org_teams = self.lastuser.org_teams(user.organizations_memberof_ids())
             # TODO: If an org has revoked access to teams for this app, it won't be in org_teams
