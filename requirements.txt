@@ -1,4 +1,0 @@
-Flask
-requests
-SQLAlchemy
-coaster>=0.3.1

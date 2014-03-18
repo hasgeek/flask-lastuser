@@ -18,6 +18,7 @@ requires = [
     'requests',
     'SQLAlchemy>=0.8',
     'coaster>=0.3.1',
+    'Flask-BabelEx',
     ]
 
 setup(

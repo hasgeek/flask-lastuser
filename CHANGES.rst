@@ -2,6 +2,7 @@
 -----
 
 * Support for merging user accounts in client apps
+* i18n using Flask-BabelEx (no UI-facing i18n yet, however)
 
 0.3.14
 ------

@@ -16,7 +16,7 @@ from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, T
     MetaData)
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
-from flask.ext.lastuser import UserInfo, UserManagerBase
+from flask.ext.lastuser import UserInfo, UserManagerBase, __
 from coaster.utils import getbool, make_name, LabeledEnum
 from coaster.sqlalchemy import BaseMixin, JsonDict, BaseNameMixin
 
@@ -33,10 +33,10 @@ class IncompleteUserMigration(Exception):
 
 # XXX: How do we do i18n here? There's nowhere to import __ from
 class USER_STATUS(LabeledEnum):
-    ACTIVE = (0, 'Active')        # Currently active
-    SUSPENDED = (1, 'Suspended')  # Suspended upstream
-    MERGED = (2, 'Merged')        # Merged locally (all data migrated)
-    DELETED = (3, 'Deleted')      # Deleted but record preserved for foreign key references
+    ACTIVE = (0, __('Active'))        # Currently active
+    SUSPENDED = (1, __('Suspended'))  # Suspended upstream
+    MERGED = (2, __('Merged'))        # Merged locally (all data migrated)
+    DELETED = (3, __('Deleted'))      # Deleted but record preserved for foreign key references
 
 
 class UserBase(BaseMixin):

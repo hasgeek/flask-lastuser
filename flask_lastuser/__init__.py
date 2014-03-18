@@ -14,6 +14,7 @@ import requests
 import urllib
 import re
 import weakref
+from flask.ext.babelex import Domain
 try:
     from collections import OrderedDict
 except ImportError:
@@ -22,7 +23,13 @@ from coaster.views import get_current_url, get_next_url
 
 from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json
 
+from . import translations
 from ._version import *
+
+# Translations
+flask_lastuser_translations = Domain(translations.__path__[0], domain='flask_lastuser')
+_ = flask_lastuser_translations.gettext
+__ = flask_lastuser_translations.lazy_gettext
 
 # Bearer token, as per http://tools.ietf.org/html/draft-ietf-oauth-v2-bearer-15#section-2.1
 auth_bearer_re = re.compile("^Bearer ([a-zA-Z0-9_.~+/-]+=*)$")
