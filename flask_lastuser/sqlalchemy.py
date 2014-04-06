@@ -18,7 +18,7 @@ from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase, __
 from coaster.utils import getbool, make_name, LabeledEnum
-from coaster.sqlalchemy import BaseMixin, JsonDict, BaseNameMixin
+from coaster.sqlalchemy import timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
 
 
 __all__ = ['UserBase', 'UserBase2', 'TeamBase', 'ProfileMixin', 'UserManager', 'IncompleteUserMigration']
@@ -31,7 +31,6 @@ class IncompleteUserMigration(Exception):
     pass
 
 
-# XXX: How do we do i18n here? There's nowhere to import __ from
 class USER_STATUS(LabeledEnum):
     ACTIVE = (0, __('Active'))        # Currently active
     SUSPENDED = (1, __('Suspended'))  # Suspended upstream
@@ -81,7 +80,7 @@ class UserBase(BaseMixin):
 
     @property
     def access_scope(self):
-        # The "or u''" is required since the field is nullable
+        # The "or u''" below is required since the field is nullable
         return (self.lastuser_token_scope or u'').split(' ')
 
     # Userinfo
@@ -423,7 +422,7 @@ class TeamBase(BaseMixin):
 
     @declared_attr
     def orgid(cls):
-        return Column(String(22), nullable=False)
+        return Column(String(22), index=True, nullable=False)
 
     @declared_attr
     def title(cls):
@@ -703,10 +702,10 @@ def make_user_team_table(base):
     if 'users_teams' in base.metadata.tables:
         return base.metadata.tables['users_teams']
     else:
-        return Table('users_teams', base.metadata,
-            Column('user_id', Integer, ForeignKey('user.id')),
-            Column('team_id', Integer, ForeignKey('team.id'))
-            )
+        return Table('users_teams', base.metadata, *(timestamp_columns + (
+            Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
+            Column('team_id', Integer, ForeignKey('team.id'), primary_key=True)
+            )))
 
 
 class UserManager(UserManagerBase):
@@ -804,24 +803,26 @@ class UserManager(UserManagerBase):
         g.user = user
         g.lastuserinfo = self.make_userinfo(user)
 
+        self.update_teams(user)
+
+    def update_teams(self, user):
         # Are we tracking teams? Sync data from Lastuser.
-
-        # TODO: Syncing the list of teams is an org-level operation, not a user-level operation.
-        # Move it out of here as there's a higher likelihood of database conflicts
-
-        # TODO: Move this to Team.update_from_lastuser or somewhere similar
         if self.teammodel:
-            org_teams = self.lastuser.org_teams(user.organizations_memberof_ids())
-            # TODO: If an org has revoked access to teams for this app, it won't be in org_teams
-            # We need to scan for teams in organizations that aren't in this list and revoke them
-            user_team_ids = [t['userid'] for t in user.userinfo['teams']]
-            # org_teams will be empty if this app's team_access flag isn't set in lastuser
+            allteamdata = user.userinfo.get('teams', [])
+            user_team_ids = [t['userid'] for t in allteamdata if t.get('member')]
+
+            org_teams = {}
+            for t in allteamdata:
+                org_teams.setdefault(t['org'], []).append(t)
+
             for orgid, teams in org_teams.items():
-                # 1/4: Remove teams that are no longer in lastuser
-                removed_teams = self.teammodel.query.filter_by(orgid=orgid).filter(
-                    ~self.teammodel.userid.in_([t['userid'] for t in teams])).all()
-                for team in removed_teams:
-                    self.db.session.delete(team)
+                if 'teams' in user.access_scope and orgid in user.organizations_owned_ids():
+                    # 1/4: Remove teams that are no longer in lastuser, provided we have
+                    # an authoritative list ('teams' is in scope and the user owns the organization)
+                    removed_teams = self.teammodel.query.filter_by(orgid=orgid).filter(
+                        ~self.teammodel.userid.in_([t['userid'] for t in teams])).all()
+                    for team in removed_teams:
+                        self.db.session.delete(team)
 
                 for teamdata in teams:
                     # 2/4: Create teams

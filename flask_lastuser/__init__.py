@@ -133,6 +133,12 @@ class UserManagerBase(object):
         """
         self.before_request()
 
+    def update_teams(self, user):
+        """
+        Update team data from this user's access token, if applicable.
+        """
+        pass
+
     def user_emails(self, user):
         """
         Retrieve all known email addresses for the given user.
@@ -164,8 +170,9 @@ class Lastuser(object):
     """
     Flask extension for Lastuser
     """
-    def __init__(self, app=None):
+    def __init__(self, app=None, cache=None):
         self.app = app
+        self.cache = cache
 
         self._login_handler = None
         self._redirect_uri_name = None
@@ -184,6 +191,9 @@ class Lastuser(object):
         if app is not None:
             self.init_app(app)
 
+    def init_cache(self, cache):
+        self.cache = cache
+
     def init_app(self, app):
         self.app = app
 
@@ -201,7 +211,6 @@ class Lastuser(object):
         self.getusers_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/getusers')
         self.getuser_userid_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
         self.getuser_userids_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERIDS', 'api/1/user/get_by_userids')
-        self.getorgteams_endpoint = app.config.get('LASTUSER_ENDPOINT_GETORGTEAMS', 'api/1/org/get_teams')
         self.getuser_autocomplete_endpoint = app.config.get('LASTUSER_ENDPOINT_USER_AUTOCOMPLETE', 'api/1/user/autocomplete')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
@@ -215,6 +224,7 @@ class Lastuser(object):
         self.external_resource('phone/add', self.endpoint_url('api/1/phone/add'), 'POST')
         self.external_resource('phone/remove', self.endpoint_url('api/1/phone/remove'), 'POST')
         self.external_resource('organizations', self.endpoint_url('api/1/organizations'), 'GET')
+        self.external_resource('teams', self.endpoint_url('api/1/teams'), 'GET')
 
         self.app.before_request(self.before_request)
         self.app.after_request(self.after_request)
@@ -653,15 +663,24 @@ class Lastuser(object):
         # TODO: If this is ever cached, provide a way to flush cache
         return self.usermanager.user_emails(user)
 
-    def org_teams(self, org):
+    def teams(self, user=None):
         """
-        Get a list of teams in the given organization(s).
+        All teams the user has access to.
         """
-        data = self._lastuser_api_call(self.getorgteams_endpoint, org=org)
-        if data['status'] == 'ok':
-            return data['org_teams']
+        if user:
+            token = user.lastuser_token
+            token_type = user.lastuser_token_type
         else:
-            return {}
+            token = token_type = None
+
+        result = self.call_resource('teams',
+            _token=token, _token_type=token_type)
+
+        if result['status'] == 'ok':
+            return result['result']['teams']
+        else:
+            return []
+        
 
     def update_user(self, user):
         """
@@ -673,6 +692,7 @@ class Lastuser(object):
         if result.get('status') == 'ok':
             userinfo = result['result']
             user = self.usermanager.load_user_userinfo(userinfo, access_token=None, update=True)
+            self.usermanager.update_teams(user)
             user.merge_accounts()
         return user
 
