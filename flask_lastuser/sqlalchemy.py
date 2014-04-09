@@ -19,7 +19,7 @@ from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase, __
 from coaster.utils import getbool, make_name, LabeledEnum
 from coaster.sqlalchemy import timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
-
+60
 
 __all__ = ['UserBase', 'UserBase2', 'TeamBase', 'ProfileMixin', 'UserManager', 'IncompleteUserMigration']
 
@@ -604,7 +604,7 @@ class ProfileMixin(object):
         # Release claim to name (unique property) and delete self if safe
         self.name = self.userid
         if safe_to_remove_profile:
-            self.query.session.remove(self)
+            self.query.session.delete(self)
         return safe_to_remove_profile
 
 
