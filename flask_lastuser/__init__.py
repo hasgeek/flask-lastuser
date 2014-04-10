@@ -90,29 +90,34 @@ class UserManagerBase(object):
         Listener that is called at the start of each request. Responsible for
         setting g.user and g.lastuserinfo
         """
-        if 'lastuser_userid' in session:
-            user = self.load_user(session['lastuser_userid'])
-            if user is None:
-                # We'll get here if one of two things happens:
-                # 1. This is a dev setup and the local database was deleted or replaced
-                # 2. Multiple apps are hosted on one domain and we got a cookie
-                #    from another app, but we've never heard of this user before.
-                # In either situation, try to create a new user record
-                userdata = self.lastuser.getuser_by_userid(session['lastuser_userid'])
-                if userdata and userdata.get('type') == 'user':
-                    # This is an actual user. Make an account
-                    user = self.load_user(userdata['userid'], create=True)
-                    user.username = userdata['name']
-                    user.fullname = userdata['title']
-                    olduser = self.load_user_by_username(userdata['name'])
-                    if olduser and olduser != user:
-                        olduser.username = None
-                    self.db.session.commit()
-                else:
-                    # No such user. Pop the session
+        user = None
+
+        if self.lastuser.cache:
+            # If this app has a cache, insist on sessions
+            if 'lastuser_sessionid' in session and 'lastuser_userid' in session:
+                # We have a sessionid and userid. Load user and verify the session
+                user = self.load_user(session['lastuser_userid'])
+                if user:
+                    cache_key = ('lastuser/session/' + session['lastuser_sessionid']).encode('utf-8')
+                    sessiondata = self.lastuser.cache.get(cache_key)
+                    if not sessiondata:
+                        sessiondata = self.lastuser.session_verify(
+                            session['lastuser_sessionid'], user)
+                    if sessiondata.get('active'):
+                        self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
+                    else:
+                        self.lastuser.cache.delete(cache_key)
+                        user = None
+                # User load OR session verification failed. Pop the cookies
+                if not user:
                     session.pop('lastuser_userid', None)
-        else:
-            user = None
+                    session.pop('lastuser_sessionid', None)
+        elif 'lastuser_userid' in session:
+            user = self.load_user(session['lastuser_userid'])
+
+        if not user:
+            session.pop('lastuser_userid', None)
+            session.pop('lastuser_sessionid', None)
 
         g.user = user
         if user:
@@ -225,6 +230,7 @@ class Lastuser(object):
         self.external_resource('phone/remove', self.endpoint_url('api/1/phone/remove'), 'POST')
         self.external_resource('organizations', self.endpoint_url('api/1/organizations'), 'GET')
         self.external_resource('teams', self.endpoint_url('api/1/teams'), 'GET')
+        self.external_resource('session/verify', self.endpoint_url('api/1/session/verify'), 'POST')
 
         self.app.before_request(self.before_request)
         self.app.after_request(self.after_request)
@@ -381,6 +387,7 @@ class Lastuser(object):
         session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
                 next=next, _external=True)
         # Discard currently logged in user
+        session.pop('lastuser_sessionid', None)
         session.pop('lastuser_userid', None)
         return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
             urllib.urlencode([
@@ -468,7 +475,9 @@ class Lastuser(object):
                 'scope': result.get('scope'),
                 }
             # Step 4.3: Save user info received
-            userinfo = result.get('userinfo')
+            userinfo = result.get('userinfo', {})
+            if 'sessionid' in userinfo:
+                session['lastuser_sessionid'] = userinfo.pop('sessionid')
             session['lastuser_userid'] = userinfo['userid']
             # Step 4.4: Connect to a user manager if there is one
             if self.usermanager:
@@ -501,11 +510,15 @@ class Lastuser(object):
             # Step 2. request.form should have at least 'user' and 'changes' keys
             if not ('userid' in request.form and 'changes' in request.form):
                 abort(400)
-            # Step 3. Look up user account locally. It has to exist
+            # Step 3. Is it a logout request?
+            if 'logout' in request.form['changes']:
+                if self.cache and 'sessionid' in request.form:
+                    self.cache.delete(('lastuser/session/' + request.form['sessionid']).encode('utf-8'))
+            # Step 4. Look up user account locally. It has to exist
             user = self.usermanager.load_user(request.form['userid'])
             if not user:
                 abort(400)
-            # Step 4. Ask Lastuser for updated information on this user
+            # Step 5. Ask Lastuser for updated information on this user
             user = self.update_user(user)
             f(user)
             return jsonify({'status': 'ok'})
@@ -680,7 +693,25 @@ class Lastuser(object):
             return result['result']['teams']
         else:
             return []
-        
+
+    def session_verify(self, sessionid, user=None):
+        """
+        Verify the user's session.
+        """
+        if user:
+            token = user.lastuser_token
+            token_type = user.lastuser_token_type
+        else:
+            token = token_type = None
+
+        result = self.call_resource('session/verify',
+            sessionid=sessionid,
+            _token=token, _token_type=token_type)
+
+        if result['status'] == 'ok':
+            return result['result']
+        else:
+            return {'active': False}
 
     def update_user(self, user):
         """
