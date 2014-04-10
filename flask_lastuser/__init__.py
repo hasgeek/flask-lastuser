@@ -206,6 +206,13 @@ class Lastuser(object):
             app.extensions = {}
         app.extensions['lastuser'] = weakref.proxy(self)
 
+        if 'cache' in app.extensions and isinstance(app.extensions['cache'], dict):
+            for c in app.extensions['cache'].keys():
+                if c.with_jinja2_ext:
+                    # Main application cache. Use it.
+                    self.init_cache(c)
+                    break
+
         self.lastuser_server = app.config['LASTUSER_SERVER']
         self.auth_endpoint = app.config.get('LASTUSER_ENDPOINT_AUTH', 'auth')
         self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
