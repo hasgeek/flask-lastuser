@@ -108,16 +108,13 @@ class UserManagerBase(object):
                     else:
                         self.lastuser.cache.delete(cache_key)
                         user = None
-                # User load OR session verification failed. Pop the cookies
-                if not user:
-                    session.pop('lastuser_userid', None)
-                    session.pop('lastuser_sessionid', None)
         elif 'lastuser_userid' in session:
             user = self.load_user(session['lastuser_userid'])
 
         if not user:
             session.pop('lastuser_userid', None)
             session.pop('lastuser_sessionid', None)
+            session.permanent = False
 
         g.user = user
         if user:
@@ -414,7 +411,9 @@ class Lastuser(object):
             g.login_required = True
             next = f(*args, **kwargs)
             g.lastuserinfo = None
+            session.pop('lastuser_sessionid', None)
             session.pop('lastuser_userid', None)
+            session.permanent = False
             if not (next.startswith('http:') or next.startswith('https:')):
                 next = urlparse.urljoin(request.url_root, next)
             return Response('<!DOCTYPE html>\n'
@@ -486,6 +485,7 @@ class Lastuser(object):
             if 'sessionid' in userinfo:
                 session['lastuser_sessionid'] = userinfo.pop('sessionid')
             session['lastuser_userid'] = userinfo['userid']
+            session.permanent = True
             # Step 4.4: Connect to a user manager if there is one
             if self.usermanager:
                 self.usermanager.login_listener(userinfo, token)
@@ -711,9 +711,12 @@ class Lastuser(object):
         else:
             token = token_type = None
 
-        result = self.call_resource('session/verify',
-            sessionid=sessionid,
-            _token=token, _token_type=token_type)
+        try:
+            result = self.call_resource('session/verify',
+                sessionid=sessionid,
+                _token=token, _token_type=token_type)
+        except LastuserResourceException:
+            return {'active': False}
 
         if result['status'] == 'ok':
             return result['result']
