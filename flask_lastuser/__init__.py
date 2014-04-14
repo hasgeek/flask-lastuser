@@ -712,16 +712,14 @@ class Lastuser(object):
             token = token_type = None
 
         try:
-            result = self.call_resource('session/verify',
-                sessionid=sessionid,
+            result = self.call_resource('session/verify', sessionid=sessionid,
                 _token=token, _token_type=token_type)
-        except LastuserResourceException:
-            return {'active': False}
 
-        if result['status'] == 'ok':
-            return result['result']
-        else:
-            return {'active': False}
+            if result['status'] == 'ok':
+                return result['result']
+        except LastuserResourceException:
+            pass
+        return {'active': False}
 
     def update_user(self, user):
         """
