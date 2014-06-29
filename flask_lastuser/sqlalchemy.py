@@ -12,8 +12,8 @@ import urlparse
 from pytz import timezone
 from werkzeug import cached_property
 from flask import g, current_app
-from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, Table, UniqueConstraint,
-    MetaData)
+from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, Table,
+    PrimaryKeyConstraint, UniqueConstraint, MetaData)
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase, __
@@ -259,11 +259,11 @@ def _do_merge_into(instance, other, helper_method=None):
 
         # Now check for multi-column indexes
         for constraint in table.constraints:
-            if isinstance(constraint, UniqueConstraint):
+            if isinstance(constraint, (PrimaryKeyConstraint, UniqueConstraint)):
                 for column in constraint.columns:
                     if column in target_columns:
-                        # The target column (typically user_id) is part of a
-                        # unique constraint. We can't migrate automatically.
+                        # The target column (typically user_id) is part of a unique
+                        # or primary key constraint. We can't migrate automatically.
                         current_app.logger.debug(
                             "do_migrate_table interrupted because column is part of a unique constraint: %s" % column)
                         return False
