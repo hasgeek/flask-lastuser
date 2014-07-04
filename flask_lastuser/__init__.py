@@ -92,8 +92,8 @@ class UserManagerBase(object):
         """
         user = None
 
-        if self.lastuser.cache:
-            # If this app has a cache, insist on sessions
+        if self.lastuser.cache and self.lastuser.use_sessions:
+            # If this app has a cache and sessions aren't explicitly disabled, use sessions
             if 'lastuser_sessionid' in session and 'lastuser_userid' in session:
                 # We have a sessionid and userid. Load user and verify the session
                 user = self.load_user(session['lastuser_userid'])
@@ -186,6 +186,7 @@ class Lastuser(object):
         self.token_endpoint = None
         self.client_id = None
         self.client_secret = None
+        self.use_sessions = True
 
         self.resources = OrderedDict()
         self.external_resources = {}
@@ -223,6 +224,7 @@ class Lastuser(object):
         self.getuser_autocomplete_endpoint = app.config.get('LASTUSER_ENDPOINT_USER_AUTOCOMPLETE', 'api/1/user/autocomplete')
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
+        self.use_sessions = app.config.get('LASTUSER_USE_SESSIONS', True)
 
         # Register known external resources provided by Lastuser itself
         self.external_resource('id', self.endpoint_url('api/1/id'), 'GET')
@@ -482,7 +484,7 @@ class Lastuser(object):
                 }
             # Step 4.3: Save user info received
             userinfo = result.get('userinfo', {})
-            if 'sessionid' in userinfo:
+            if 'sessionid' in userinfo and self.use_sessions:
                 session['lastuser_sessionid'] = userinfo.pop('sessionid')
             session['lastuser_userid'] = userinfo['userid']
             session.permanent = True
@@ -579,7 +581,14 @@ class Lastuser(object):
                         # No token provided in Authorization header or in request parameters
                         return resource_auth_error(u"An access token is required to access this resource.")
 
-                result = self._lastuser_api_call(self.tokenverify_endpoint, resource=name, access_token=token)
+                cache_key = u'lastuser/tokenverify/{token}/{resource}'.format(token=token, resource=name)
+                result = None
+                if self.cache:
+                    result = self.cache.get(cache_key)
+                if result is None:
+                    result = self._lastuser_api_call(self.tokenverify_endpoint, resource=name, access_token=token)
+                if self.cache:
+                    self.cache.set(cache_key, result, timeout=300)
                 # result should be cached temporarily. Maybe in memcache?
                 if result['status'] == 'error':
                     return Response(u"Invalid token.", 403)

@@ -1,9 +1,9 @@
 0.4.0
 -----
 
-* Support for merging user accounts in client apps
-* i18n using Flask-BabelEx (no UI-facing i18n yet, however)
-* Switched to login sessions and cache management
+* Support for merging user accounts in client apps.
+* i18n using Flask-BabelEx (no UI-facing i18n yet, however).
+* Switched to login sessions and cache management (optionally disabled).
 
 0.3.14
 ------
@@ -18,4 +18,4 @@
 0.3.13
 ------
 
-* Start of version history record
+* Start of version history record.
