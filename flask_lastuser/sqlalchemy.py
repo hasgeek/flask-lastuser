@@ -205,6 +205,11 @@ class UserBase(BaseMixin):
         """Links to the user's organizations on the current site"""
         return []
 
+    def owner_choices(self):
+        """Return userids and titles of users and owned organizations for selection lists."""
+        return [(self.userid, self.pickername)] + [
+            (o['userid'], u'{title} (~{name})'.format(title=o['title'], name=o['name'])) for o in self.organizations_owned()]
+
     # NOTE: Compatibility definition, please do not use in new code
     user_organization_owned_ids = user_organizations_owned_ids
 
