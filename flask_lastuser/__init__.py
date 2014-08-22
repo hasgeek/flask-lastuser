@@ -43,7 +43,15 @@ class LastuserException(Exception):
     pass
 
 
+class LastuserApiException(LastuserException):
+    pass
+
+
 class LastuserResourceException(LastuserException):
+    pass
+
+
+class LastuserResourceConnectionException(LastuserResourceException):
     pass
 
 
@@ -546,8 +554,8 @@ class Lastuser(object):
                 auth=(self.client_id, self.client_secret),
                 data=kwargs)
         if r.status_code in (400, 500, 401):
-            abort(500)
-        elif r.status_code == 200:
+            raise LastuserApiException("Call to %s returned %d" % (endpoint, r.status_code))
+        elif r.status_code in (200, 201, 202, 203):
             return r.json() if callable(r.json) else r.json
 
     def sync_resources(self):
@@ -671,15 +679,18 @@ class Lastuser(object):
             headers = dict(headers)
         headers['Authorization'] = 'Bearer %s' % _token
 
-        if resource_details['method'] == 'GET':
-            r = requests.get(resource_details['endpoint'], headers=headers, params=kw)
-        else:
-            r = requests.request(resource_details['method'], resource_details['endpoint'],
-                headers=headers, data=data if data is not None else kw, files=files)
+        try:
+            if resource_details['method'] == 'GET':
+                r = requests.get(resource_details['endpoint'], headers=headers, params=kw)
+            else:
+                r = requests.request(resource_details['method'], resource_details['endpoint'],
+                    headers=headers, data=data if data is not None else kw, files=files)
+        except requests.exceptions.RequestException as e:
+            raise LastuserResourceConnectionException("Could not connect to the server. Connection error: %s" % e)
         # Parse the result
-        if r.status_code != 200:
+        if r.status_code not in (200, 201, 202, 203):
             # XXX: What other status codes could we possibly get from a REST call?
-            raise LastuserResourceException("Resource returned status %d." % r.status_code)
+            raise LastuserResourceException("Resource returned status %d" % r.status_code)
         if _raw:
             return r
         else:
@@ -726,8 +737,12 @@ class Lastuser(object):
 
             if result['status'] == 'ok':
                 return result['result']
+        except LastuserResourceConnectionException:
+            # Server not reachable? May be an interim error, so don't knock off the user already
+            return {'active': True}
         except LastuserResourceException:
             pass
+
         return {'active': False}
 
     def update_user(self, user):
