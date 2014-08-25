@@ -223,6 +223,8 @@ class Lastuser(object):
         self.auth_endpoint = app.config.get('LASTUSER_ENDPOINT_AUTH', 'auth')
         self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
         self.logout_endpoint = app.config.get('LASTUSER_ENDPOINT_LOGOUT', 'logout')
+        self.login_beacon_iframe_endpoint = app.config.get('LASTUSER_LOGIN_BEACON_IFRAME', 'api/1/login/beacon.html')
+
         self.syncresources_endpoint = app.config.get('LASTUSER_ENDPOINT_REGISTER_RESOURCE', 'api/1/resource/sync')
         self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
         self.getuser_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
@@ -254,6 +256,7 @@ class Lastuser(object):
         um.lastuser = weakref.proxy(self)
 
     def before_request(self):
+        g.lastuser = self
         if self.usermanager:
             self.usermanager.before_request()
 

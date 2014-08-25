@@ -5,6 +5,7 @@
 * i18n using Flask-BabelEx (no UI-facing i18n yet, however).
 * Switched to login sessions and cache management (optionally disabled).
 * New helper method owner_choices() in UserBase.
+* Login beacon endpoint and object availability as g.lastuser.
 
 0.3.14
 ------
