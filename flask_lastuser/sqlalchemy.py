@@ -18,8 +18,8 @@ from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase, __
 from coaster.utils import getbool, make_name, LabeledEnum
-from coaster.sqlalchemy import timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
-60
+from coaster.sqlalchemy import make_timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
+
 
 __all__ = ['UserBase', 'UserBase2', 'TeamBase', 'ProfileMixin', 'UserManager', 'IncompleteUserMigration']
 
@@ -707,7 +707,7 @@ def make_user_team_table(base):
     if 'users_teams' in base.metadata.tables:
         return base.metadata.tables['users_teams']
     else:
-        return Table('users_teams', base.metadata, *(timestamp_columns + (
+        return Table('users_teams', base.metadata, *(make_timestamp_columns() + (
             Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
             Column('team_id', Integer, ForeignKey('team.id'), primary_key=True)
             )))
