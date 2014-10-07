@@ -489,19 +489,14 @@ class ProfileMixin(object):
     ProfileMixin provides methods to assist with creating Profile models (which represent
     both User and Organization models), and keeping them updated as user data changes.
 
-    ProfileMixin does not provide any columns (apart from aliasing userid and buid to
-    each other). Subclasses must provide their own columns including the mandatory name,
+    ProfileMixin does not provide any columns (apart from aliasing userid to buid).
+    Subclasses must provide their own columns including the mandatory name,
     title and buid or userid. Use ProfileBase to get these columns.
     """
     @declared_attr
     def userid(cls):
         """Synonym for buid if the model has no existing userid column."""
         return synonym('buid')
-
-    @declared_attr
-    def buid(cls):
-        """Synonym for userid if the model has no existing buid column."""
-        return synonym('userid')
 
     @property
     def pickername(self):
@@ -620,6 +615,11 @@ class ProfileColumnMixin(StatusMixin):
     @declared_attr
     def userid(cls):
         return Column(Unicode(22), nullable=False, unique=True)
+
+    @declared_attr
+    def buid(cls):
+        """Synonym for userid."""
+        return synonym('userid')
 
     @classmethod
     def get(cls, name=None, userid=None):
