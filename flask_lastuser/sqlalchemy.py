@@ -21,7 +21,9 @@ from coaster.utils import getbool, make_name, LabeledEnum
 from coaster.sqlalchemy import make_timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
 
 
-__all__ = ['UserBase', 'UserBase2', 'TeamBase', 'ProfileMixin', 'UserManager', 'IncompleteUserMigration']
+__all__ = ['UserBase', 'UserBase2', 'TeamBase',
+    'ProfileMixin', 'ProfileMixin2', 'ProfileBase',
+    'UserManager', 'IncompleteUserMigration']
 
 
 class IncompleteUserMigration(Exception):
@@ -97,8 +99,8 @@ class UserBase(BaseMixin):
         :param str username: Username to lookup
         :param str userid: Userid to lookup
         """
-        if not bool(username) ^ bool(userid):
-            raise TypeError("Either username or userid should be specified")
+        if (not not username) + (not not userid) != 1:
+            raise TypeError("Only one of username or userid should be specified")
 
         if userid:
             query = cls.query.filter_by(userid=userid)
@@ -608,26 +610,19 @@ class ProfileMixin(object):
         return safe_to_remove_profile
 
 
-class ProfileColumnMixin(StatusMixin):
-    """
-    Adds :attr:`userid` and :attr:`status` columns and helper methods.
-    """
-    @declared_attr
-    def userid(cls):
-        return Column(Unicode(22), nullable=False, unique=True)
-
-    @declared_attr
-    def buid(cls):
-        """Synonym for userid."""
-        return synonym('userid')
-
+class ProfileMixin2(StatusMixin, ProfileMixin):
     @classmethod
-    def get(cls, name=None, userid=None):
-        if not bool(name) ^ bool(userid):
-            raise TypeError("Either name or userid should be specified")
+    def get(cls, name=None, userid=None, buid=None):
+        if (not not name) + (not not userid) + (not not buid) != 1:
+            raise TypeError("Only one of name or userid or buid should be specified")
 
         if userid:
             profile = cls.query.filter_by(userid=userid, status=USER_STATUS.ACTIVE).one_or_none()
+        elif buid:
+            # buid is used in Nodular, where it has slightly different semantics from
+            # userid: buid always gets the Node if it exists, so there's no check
+            # against the status column
+            profile = cls.query.filter_by(buid=buid).one_or_none()
         else:
             profile = cls.query.filter_by(name=name, status=USER_STATUS.ACTIVE).one_or_none()
 
@@ -655,18 +650,21 @@ class ProfileColumnMixin(StatusMixin):
         """
         Query Lastuser for current details of this userid and update as necessary.
         """
-        lastuser = current_app.extensions.get('lastuser')
+        lastuser = current_app.extensions.get('lastuser') if current_app else None
         if lastuser:
             userinfo = lastuser.getuser_by_userid(self.userid)
             if userinfo:
                 if userinfo['userid'] != self.userid and self.userid in userinfo.get('oldids', []):
                     # This Profile has gone away. Does the new profile exist here?
                     profile = self.query.filter_by(userid=userinfo['userid']).first()
-                    if profile:
-                        self.merge_into(profile)
+                    if profile is not None:
+                        safe_to_remove = self.merge_into(profile)
+                        if safe_to_remove:
+                            self.query.session.delete(self)
                     else:
                         # The new profile isn't here yet, so assume their identity
                         self.userid = userinfo['userid']
+                        self.status = USER_STATUS.ACTIVE
                 moveprofile = self.query.filter_by(name=userinfo['name']).first()
                 if moveprofile and moveprofile != self:
                     # There's another profile holding our desired name. Move it out of the way
@@ -676,16 +674,15 @@ class ProfileColumnMixin(StatusMixin):
             else:
                 # Lastuser was unreachable or doesn't know about us anymore (FIXME: find out which)
                 self.status = USER_STATUS.DELETED
-                
 
     def merge_into(self, profile):
         """
         Move all data from self to the other profile, typically when merging user accounts
         """
         if self.status == USER_STATUS.MERGED:
-            return
+            return True
 
-        assert isinstance(profile, ProfileMixin) and profile != self
+        assert isinstance(profile, ProfileMixin2) and profile != self
 
         safe_to_remove_profile = _do_merge_into(self, profile, 'migrate_profile')
 
@@ -695,12 +692,27 @@ class ProfileColumnMixin(StatusMixin):
             self.status = USER_STATUS.MERGED
         return safe_to_remove_profile
 
+    @classmethod
+    def update_all_from_lastuser(cls):
+        """
+        Update all profiles from Lastuser
+        """
+        for profile in cls.query:
+            profile.update_from_lastuser()
 
-class ProfileBase(ProfileColumnMixin, ProfileMixin, BaseNameMixin):
+
+class ProfileBase(ProfileMixin2, BaseNameMixin):
     """
     Base class for profiles
     """
-    pass
+    @declared_attr
+    def userid(cls):
+        return Column(Unicode(22), nullable=False, unique=True)
+
+    @declared_attr
+    def buid(cls):
+        """Synonym for userid."""
+        return synonym('userid')
 
 
 def make_user_team_table(base):
