@@ -666,11 +666,13 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
                         # The new profile isn't here yet, so assume their identity
                         self.userid = userinfo['userid']
                         self.status = USER_STATUS.ACTIVE
-                with self.query.session.no_autoflush:
-                    moveprofile = self.query.filter_by(name=userinfo['name']).first()
-                if moveprofile and moveprofile != self:
-                    # There's another profile holding our desired name. Move it out of the way
-                    moveprofile.name = moveprofile.userid
+                if userinfo['name'] is not None:
+                    with self.query.session.no_autoflush:
+                        moveprofile = self.query.filter_by(name=userinfo['name']).first()
+                    if moveprofile and moveprofile != self:
+                        # There's another profile holding our desired name. Move it out of the way
+                        moveprofile.name = moveprofile.userid
+                        self.query.session.flush()
                 self.name = userinfo['name'] or userinfo['userid']
                 self.title = userinfo['title']
             else:
