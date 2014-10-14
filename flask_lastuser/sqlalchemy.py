@@ -656,7 +656,8 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
             if userinfo:
                 if userinfo['userid'] != self.userid and self.userid in userinfo.get('oldids', []):
                     # This Profile has gone away. Does the new profile exist here?
-                    profile = self.query.filter_by(userid=userinfo['userid']).first()
+                    with self.query.session.no_autoflush:
+                        profile = self.query.filter_by(userid=userinfo['userid']).first()
                     if profile is not None:
                         safe_to_remove = self.merge_into(profile)
                         if safe_to_remove:
@@ -665,7 +666,8 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
                         # The new profile isn't here yet, so assume their identity
                         self.userid = userinfo['userid']
                         self.status = USER_STATUS.ACTIVE
-                moveprofile = self.query.filter_by(name=userinfo['name']).first()
+                with self.query.session.no_autoflush:
+                    moveprofile = self.query.filter_by(name=userinfo['name']).first()
                 if moveprofile and moveprofile != self:
                     # There's another profile holding our desired name. Move it out of the way
                     moveprofile.name = moveprofile.userid
@@ -699,6 +701,7 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
         """
         for profile in cls.query:
             profile.update_from_lastuser()
+            cls.query.session.flush()
 
 
 class ProfileBase(ProfileMixin2, BaseNameMixin):
