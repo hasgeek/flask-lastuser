@@ -669,7 +669,7 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
                 if moveprofile and moveprofile != self:
                     # There's another profile holding our desired name. Move it out of the way
                     moveprofile.name = moveprofile.userid
-                self.name = userinfo['name']
+                self.name = userinfo['name'] or userinfo['userid']
                 self.title = userinfo['title']
             else:
                 # Lastuser was unreachable or doesn't know about us anymore (FIXME: find out which)
