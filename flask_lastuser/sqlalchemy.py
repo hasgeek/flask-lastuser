@@ -597,7 +597,7 @@ class ProfileMixin(object):
     def merge_into(self, profile):
         """
         Move all data from self to the other profile, typically when merging user
-        accounts. Note that ProfileBase.merge_into replaces this method.
+        accounts. Note that ProfileMixin2.merge_into replaces this method.
         """
         assert isinstance(profile, ProfileMixin) and profile != self
 
@@ -677,6 +677,7 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
                 self.title = userinfo['title']
             else:
                 # Lastuser was unreachable or doesn't know about us anymore (FIXME: find out which)
+                self.name = self.userid
                 self.status = USER_STATUS.DELETED
 
     def merge_into(self, profile):
