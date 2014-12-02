@@ -185,6 +185,16 @@ class UserBase(BaseMixin):
         """Userids of the user and all the organizations the user is a member of"""
         return [self.userid] + self.organizations_memberof_ids()
 
+    def owner_of(self, userid):
+        if not isinstance(userid, basestring):
+            userid = userid.userid
+        return userid in self.user_organizations_owned_ids()
+
+    def member_of(self, userid):
+        if not isinstance(userid, basestring):
+            userid = userid.userid
+        return userid in self.user_organizations_memberof_ids()
+
     @property
     def profile_url(self):
         """URL to the user's profile. Can be overidden by subclasses"""
