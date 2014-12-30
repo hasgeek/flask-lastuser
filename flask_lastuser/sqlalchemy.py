@@ -146,6 +146,10 @@ class UserBase(BaseMixin):
         # will require migrations in downstream apps.
         return self.userinfo and self.userinfo.get('phone')
 
+    @property
+    def avatar(self):
+        return self.userinfo and self.userinfo.get('avatar')
+
     def __repr__(self):
         return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
 
