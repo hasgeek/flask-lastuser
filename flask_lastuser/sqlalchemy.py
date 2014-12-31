@@ -297,7 +297,7 @@ def _do_merge_into(instance, other, helper_method=None):
             return False
 
         for column in target_columns:
-            session.execute(table.update().where(column==instance.id).values(**{column.name: other.id}))
+            session.execute(table.update().where(column == instance.id).values(**{column.name: other.id}))
             session.flush()
 
         # All done, table successfully migrated. Hurrah!
@@ -406,7 +406,7 @@ class UserMergeMixin(StatusMixin):
 
     def merge_into(self, user):
         """
-        Merge self into the specified user and relink all 
+        Merge self into the specified user and relink all
         """
         current_app.logger.debug("Preparing to merge %s into %s." % (self, user))
         if self.status == USER_STATUS.MERGED:

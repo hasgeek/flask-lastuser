@@ -24,7 +24,7 @@ from coaster.views import get_current_url, get_next_url
 from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json
 
 from . import translations
-from ._version import *
+from ._version import *  # NOQA
 
 # Translations
 flask_lastuser_translations = Domain(translations.__path__[0], domain='flask_lastuser')
@@ -433,7 +433,7 @@ class Lastuser(object):
                 '<html><head><meta http-equiv="refresh" content="0; url=%(url)s"></head>\n'
                 '<body>Logging you out...</body></html>' % {
                     'url': urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
-                % (urllib.quote(self.client_id), urllib.quote(next))})
+                    % (urllib.quote(self.client_id), urllib.quote(next))})
         return decorated_function
 
     def auth_handler(self, f):
