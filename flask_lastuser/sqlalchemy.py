@@ -217,6 +217,10 @@ class UserBase(BaseMixin):
         else:
             return self.fullname
 
+    @property
+    def avatar(self):
+        return self.userinfo and self.userinfo.get('avatar')
+
     def organization_links(self):
         """Links to the user's organizations on the current site"""
         return []
