@@ -552,9 +552,9 @@ class ProfileMixin(object):
         :param bool make_user_profiles: Should user profiles be created?
         :param bool make_org_profiles: Should organization profiles be created?
         """
-        idsnames = {user.userid: {'name': user.profile_name, 'title': user.fullname}}
+        idsnames = {user.userid: {'name': user.profile_name, 'title': user.fullname, 'domain': None}}
         for org in user.organizations_memberof():
-            idsnames[org['userid']] = {'name': org['name'], 'title': org['title']}
+            idsnames[org['userid']] = {'name': org['name'], 'title': org['title'], 'domain': org.get('domain')}
         namesids = dict([(value['name'], key) for key, value in idsnames.items()])
 
         # First, check if Profile userids and names match
@@ -574,6 +574,9 @@ class ProfileMixin(object):
                 profile.name = idsnames[profile.userid]['name']
             if profile.title != idsnames[profile.userid]['title']:
                 profile.title = idsnames[profile.userid]['title']
+            if hasattr(profile, 'domain'):  # If this profile has a domain attribute, set it
+                if profile.domain != idsnames[profile.userid]['domain']:
+                    profile.domain = idsnames[profile.userid]['domain']
 
         # Flush this too
         session.flush()
@@ -598,6 +601,8 @@ class ProfileMixin(object):
                         profile = cls(userid=org['userid'], name=org['name'], title=org['title'])
                     if type_org is not None:
                         setattr(profile, type_col, type_org)
+                    if org.get('domain'):
+                        profile.domain = org['domain']
                     session.add(profile)
 
         # Fourth, migrate profiles if there are any matching the user's old ids
@@ -689,6 +694,11 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
                         self.query.session.flush()
                 self.name = userinfo['name'] or userinfo['userid']
                 self.title = userinfo['title']
+                if 'domain' in userinfo:
+                    # If we got a domain from Lastuser, save it. If the model doesn't have a domain column,
+                    # it'll be discarded when the object is saved and reloaded from db. If it does have a column,
+                    # this value goes into the column
+                    self.domain = userinfo['domain']
             else:
                 # Lastuser was unreachable or doesn't know about us anymore (FIXME: find out which)
                 self.name = self.userid
