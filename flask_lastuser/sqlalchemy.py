@@ -21,7 +21,7 @@ from coaster.utils import getbool, make_name, LabeledEnum
 from coaster.sqlalchemy import make_timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
 
 
-__all__ = ['UserBase', 'UserBase2', 'TeamBase',
+__all__ = ['UserBase', 'UserBase2', 'TeamMixin', 'TeamMembersMixin', 'TeamBase', 'TeamBase2',
     'ProfileMixin', 'ProfileMixin2', 'ProfileBase',
     'UserManager', 'IncompleteUserMigration']
 
@@ -434,9 +434,7 @@ class UserBase2(UserMergeMixin, UserBase):
     pass
 
 
-class TeamBase(BaseMixin):
-    __tablename__ = 'team'
-
+class TeamMixin(BaseMixin):
     @declared_attr
     def userid(cls):
         return Column(String(22), unique=True, nullable=False)
@@ -498,6 +496,20 @@ class TeamBase(BaseMixin):
         Update information about this team from Lastuser.
         """
         pass  # TODO
+
+
+class TeamBase(TeamMixin):
+    __tablename__ = 'team'
+
+
+class TeamMembersMixin(object):
+    @declared_attr
+    def members(cls):
+        return Column(Boolean, nullable=False, default=False)
+
+
+class TeamBase2(TeamMixin, TeamMembersMixin):
+    __tablename__ = 'team'
 
 
 class ProfileMixin(object):
@@ -744,6 +756,9 @@ class ProfileBase(ProfileMixin2, BaseNameMixin):
         """Synonym for userid."""
         return synonym('userid')
 
+    def __repr__(self):
+        return '<%s %s "%s">' % (self.__class__.__name__, self.name, self.title)
+
 
 def make_user_team_table(base):
     if 'users_teams' in base.metadata.tables:
@@ -863,7 +878,7 @@ class UserManager(UserManagerBase):
                 org_teams.setdefault(t['org'], []).append(t)
 
             for orgid, teams in org_teams.items():
-                if 'teams' in user.access_scope and orgid in user.organizations_owned_ids():
+                if ('teams' in user.access_scope or 'teams/*' in user.access_scope) and orgid in user.organizations_owned_ids():
                     # 1/4: Remove teams that are no longer in lastuser, provided we have
                     # an authoritative list ('teams' is in scope and the user owns the organization)
                     removed_teams = self.teammodel.query.filter_by(orgid=orgid).filter(
@@ -879,6 +894,7 @@ class UserManager(UserManagerBase):
                                               orgid=teamdata['org'],
                                               title=teamdata['title'],
                                               owners=getbool(teamdata['owners']))
+                        team.members = getbool(teamdata['members'])
                         self.db.session.add(team)
                     else:
                         # Check if title has changed. The others will never change
