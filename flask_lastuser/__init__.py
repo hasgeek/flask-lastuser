@@ -22,9 +22,17 @@ except ImportError:
 from coaster.views import get_current_url, get_next_url
 
 from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json
+from flask.signals import Namespace
 
 from . import translations
 from ._version import *  # NOQA
+
+# Signals
+lastuser_signals = Namespace()
+
+signal_user_session_refreshed = lastuser_signals.signal('user-session-refreshed')
+signal_user_session_expired = lastuser_signals.signal('user-session-expired')
+
 
 # Translations
 flask_lastuser_translations = Domain(translations.__path__[0], domain='flask_lastuser')
@@ -108,14 +116,20 @@ class UserManagerBase(object):
                 if user:
                     cache_key = ('lastuser/session/' + session['lastuser_sessionid']).encode('utf-8')
                     sessiondata = self.lastuser.cache.get(cache_key)
+                    fresh_data = False
                     if not sessiondata:
                         sessiondata = self.lastuser.session_verify(
                             session['lastuser_sessionid'], user)
+                        fresh_data = True
                     if sessiondata.get('active'):
                         self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
+                        if fresh_data:
+                            signal_user_session_refreshed.send(user)
                     else:
                         self.lastuser.cache.delete(cache_key)
                         user = None
+                        if fresh_data:
+                            signal_user_session_expired.send(user)
         elif 'lastuser_userid' in session:
             user = self.load_user(session['lastuser_userid'])
 
