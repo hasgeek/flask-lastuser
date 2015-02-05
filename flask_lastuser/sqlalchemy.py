@@ -16,7 +16,7 @@ from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, T
     PrimaryKeyConstraint, UniqueConstraint, MetaData)
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
-from flask.ext.lastuser import UserInfo, UserManagerBase, __
+from flask.ext.lastuser import UserInfo, UserManagerBase, signal_user_looked_up, __
 from coaster.utils import getbool, make_name, LabeledEnum
 from coaster.sqlalchemy import make_timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
 
@@ -866,6 +866,7 @@ class UserManager(UserManagerBase):
         g.lastuserinfo = self.make_userinfo(user)
 
         self.update_teams(user)
+        signal_user_looked_up.send(g.user)
 
     def update_teams(self, user):
         # Are we tracking teams? Sync data from Lastuser.

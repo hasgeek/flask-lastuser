@@ -32,7 +32,8 @@ lastuser_signals = Namespace()
 
 signal_user_session_refreshed = lastuser_signals.signal('user-session-refreshed')
 signal_user_session_expired = lastuser_signals.signal('user-session-expired')
-
+signal_user_looked_up = lastuser_signals.signal('user-looked-up')
+signal_before_wrapped_view = lastuser_signals.signal('before-wrapped-view')
 
 # Translations
 flask_lastuser_translations = Domain(translations.__path__[0], domain='flask_lastuser')
@@ -64,6 +65,7 @@ class LastuserResourceConnectionException(LastuserResourceException):
 
 
 def randomstring():
+    """Returns a random UUID for use as a state token for CSRF protection"""
     return unicode(uuid.uuid4())
 
 
@@ -149,6 +151,7 @@ class UserManagerBase(object):
 
         # This will be set to True by the various login_required handlers downstream
         g.login_required = False
+        signal_user_looked_up.send(g.user)
 
     def login_listener(self, userinfo, token):
         """
@@ -303,6 +306,7 @@ class Lastuser(object):
                     abort(403)
                 return redirect(url_for(self._login_handler.__name__,
                     next=get_current_url()))
+            signal_before_wrapped_view.send(f)
             return f(*args, **kwargs)
         return decorated_function
 
@@ -341,6 +345,7 @@ class Lastuser(object):
                         next=get_current_url()))
                 if not self.has_permission(permission):
                     abort(403)
+                signal_before_wrapped_view.send(f)
                 return f(*args, **kwargs)
             return decorated_function
         return inner
@@ -368,6 +373,7 @@ class Lastuser(object):
                         required = set(self._login_handler().get('scope', 'id').split(' '))
                         required.update(scope)
                         return self._login_handler_internal(scope=' '.join(required), next=get_current_url())
+                signal_before_wrapped_view.send(f)
                 return f(*args, **kwargs)
             return decorated_function
         return inner
@@ -485,7 +491,7 @@ class Lastuser(object):
                       'redirect_uri': session.get('lastuser_redirect_uri'),
                       'grant_type': 'authorization_code',
                       'scope': self._login_handler().get('scope', '')})
-            result = r.json() if callable(r.json) else r.json
+            result = r.json()
 
             # Step 2.1: Remove temporary session variables
             session.pop('lastuser_redirect_uri', None)
@@ -573,7 +579,7 @@ class Lastuser(object):
         if r.status_code in (400, 500, 401):
             raise LastuserApiException("Call to %s returned %d" % (endpoint, r.status_code))
         elif r.status_code in (200, 201, 202, 203):
-            return r.json() if callable(r.json) else r.json
+            return r.json()
 
     def sync_resources(self):
         return self._lastuser_api_call(self.syncresources_endpoint, resources=json.dumps(self.resources))
@@ -622,6 +628,7 @@ class Lastuser(object):
                     # If the user is unknown, make a new user. If the user is known, don't update scoped data
                     g.user = self.usermanager.load_user_userinfo(result['userinfo'], token=None, update=False)
                     g.lastuserinfo = self.usermanager.make_userinfo(g.user)
+                    signal_user_looked_up.send(g.user)
                     return f(result, *args, **kw)
             self.resources[name] = {
                 'name': name,
@@ -711,7 +718,7 @@ class Lastuser(object):
         if _raw:
             return r
         else:
-            return (r.json() if callable(r.json) else r.json) or r.text
+            return (r.json()) or r.text
 
     def user_emails(self, user):
         """
