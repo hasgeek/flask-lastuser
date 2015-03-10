@@ -686,7 +686,7 @@ class Lastuser(object):
         resource_details = self.external_resources[name]
 
         if _token is None:
-            if not g.lastuserinfo:
+            if not hasattr(g, 'lastuserinfo') or not g.lastuserinfo:
                 raise LastuserResourceException("No access token available")
             _token = g.lastuserinfo.token
             _token_type = g.lastuserinfo.token_type
