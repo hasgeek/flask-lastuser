@@ -64,9 +64,18 @@ class LastuserResourceConnectionException(LastuserResourceException):
     pass
 
 
+class LastuserTokenAuthException(LastuserException):
+    pass
+
+
 def randomstring():
     """Returns a random UUID for use as a state token for CSRF protection"""
     return unicode(uuid.uuid4())
+
+
+def resource_auth_error(message):
+    return Response(message, 401,
+        {'WWW-Authenticate': 'Bearer realm="Token Required"'})
 
 
 class UserInfo(object):
@@ -100,8 +109,46 @@ class UserManagerBase(object):
     def make_userinfo(self, user):
         raise NotImplementedError("Not implemented in the base class")
 
-    def load_user_userinfo(self, userinfo, token, update=False):
+    def load_user_userinfo(self, userinfo, access_token, update=False):
         raise NotImplementedError("Not implemented in the base class")
+
+    def token_auth(self, resource='*', header_only=False):
+        if 'Authorization' in request.headers:
+            token_match = auth_bearer_re.search(request.headers['Authorization'])
+            if token_match:
+                token = token_match.group(1)
+            else:
+                # Unrecognized Authorization header
+                raise LastuserTokenAuthException(u"A Bearer token is required in the Authorization header.")
+            if 'access_token' in request.values:
+                raise LastuserTokenAuthException(u"Access token specified in both header and body.")
+        elif not header_only:
+            # Is there an access token in the form or query?
+            token = request.values.get('access_token')
+        else:
+            return
+
+        if not token:
+            return
+
+        if resource == '*':
+            cache_key = u'lastuser/tokenverify/{token}'.format(token=token)
+        else:
+            cache_key = u'lastuser/tokenverify/{token}/{resource}'.format(token=token, resource=resource)
+        result = None
+        if self.lastuser.cache:
+            result = self.lastuser.cache.get(cache_key)
+        if result is None:
+            result = self.lastuser._lastuser_api_call(self.lastuser.tokenverify_endpoint, resource=resource, access_token=token)
+        if self.lastuser.cache:
+            self.lastuser.cache.set(cache_key, result, timeout=300)
+        if result['status'] == 'error':
+            raise LastuserTokenAuthException(u"Invalid token.")
+        elif result['status'] == 'ok':
+            # All okay.
+            # If the user is unknown, make a new user. If the user is known, don't update scoped data
+            user = self.load_user_userinfo(result['userinfo'], access_token=None, update=False)
+            return user
 
     def before_request(self):
         """
@@ -109,31 +156,41 @@ class UserManagerBase(object):
         setting g.user and g.lastuserinfo
         """
         user = None
+        g.access_scope = []
+        user_from_token = False
 
-        if self.lastuser.cache and self.lastuser.use_sessions:
-            # If this app has a cache and sessions aren't explicitly disabled, use sessions
-            if 'lastuser_sessionid' in session and 'lastuser_userid' in session:
-                # We have a sessionid and userid. Load user and verify the session
+        # Look for a valid auth token that maps to a user
+        try:
+            user = self.token_auth(header_only=True)
+        except LastuserTokenAuthException as e:
+            return resource_auth_error(unicode(e))
+        if user:
+            user_from_token = True
+        else:
+            if self.lastuser.cache and self.lastuser.use_sessions:
+                # If this app has a cache and sessions aren't explicitly disabled, use sessions
+                if 'lastuser_sessionid' in session and 'lastuser_userid' in session:
+                    # We have a sessionid and userid. Load user and verify the session
+                    user = self.load_user(session['lastuser_userid'])
+                    if user:
+                        cache_key = ('lastuser/session/' + session['lastuser_sessionid']).encode('utf-8')
+                        sessiondata = self.lastuser.cache.get(cache_key)
+                        fresh_data = False
+                        if not sessiondata:
+                            sessiondata = self.lastuser.session_verify(
+                                session['lastuser_sessionid'], user)
+                            fresh_data = True
+                        if sessiondata.get('active'):
+                            self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
+                            if fresh_data:
+                                signal_user_session_refreshed.send(user)
+                        else:
+                            self.lastuser.cache.delete(cache_key)
+                            user = None
+                            if fresh_data:
+                                signal_user_session_expired.send(user)
+            elif 'lastuser_userid' in session:
                 user = self.load_user(session['lastuser_userid'])
-                if user:
-                    cache_key = ('lastuser/session/' + session['lastuser_sessionid']).encode('utf-8')
-                    sessiondata = self.lastuser.cache.get(cache_key)
-                    fresh_data = False
-                    if not sessiondata:
-                        sessiondata = self.lastuser.session_verify(
-                            session['lastuser_sessionid'], user)
-                        fresh_data = True
-                    if sessiondata.get('active'):
-                        self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
-                        if fresh_data:
-                            signal_user_session_refreshed.send(user)
-                    else:
-                        self.lastuser.cache.delete(cache_key)
-                        user = None
-                        if fresh_data:
-                            signal_user_session_expired.send(user)
-        elif 'lastuser_userid' in session:
-            user = self.load_user(session['lastuser_userid'])
 
         if not user:
             session.pop('lastuser_userid', None)
@@ -142,10 +199,12 @@ class UserManagerBase(object):
 
         g.user = user
         if user:
+            g.access_scope = ['*']  # TODO: In future, restrict to access token's scope
             g.lastuserinfo = self.make_userinfo(user)
-            if session['lastuser_userid'] != user.userid:
-                # Merged account loaded. Switch over
-                session['lastuser_userid'] = user.userid
+            if not user_from_token:
+                if session.get('lastuser_userid') != user.userid:
+                    # Merged account loaded. Switch over
+                    session['lastuser_userid'] = user.userid
         else:
             g.lastuserinfo = None
 
@@ -589,47 +648,12 @@ class Lastuser(object):
         Decorator for resource handlers. Verifies tokens and passes info on
         the user and calling client.
         """
-        def resource_auth_error(message):
-            return Response(message, 401,
-                {'WWW-Authenticate': 'Bearer realm="Token Required" scope="%s"' % name})
-
         def inner(f):
             @wraps(f)
             def decorated_function(*args, **kw):
-                if 'Authorization' in request.headers:
-                    token_match = auth_bearer_re.search(request.headers['Authorization'])
-                    if token_match:
-                        token = token_match.group(1)
-                    else:
-                        # Unrecognized Authorization header
-                        return resource_auth_error(u"A Bearer token is required in the Authorization header.")
-                    if 'access_token' in request.values:
-                        return resource_auth_error(u"Access token specified in both header and body.")
-                else:
-                    # Is there an access token in the form or query?
-                    token = request.values.get('access_token')
-                    if not token:
-                        # No token provided in Authorization header or in request parameters
-                        return resource_auth_error(u"An access token is required to access this resource.")
-
-                cache_key = u'lastuser/tokenverify/{token}/{resource}'.format(token=token, resource=name)
-                result = None
-                if self.cache:
-                    result = self.cache.get(cache_key)
-                if result is None:
-                    result = self._lastuser_api_call(self.tokenverify_endpoint, resource=name, access_token=token)
-                if self.cache:
-                    self.cache.set(cache_key, result, timeout=300)
-                # result should be cached temporarily. Maybe in memcache?
-                if result['status'] == 'error':
-                    return Response(u"Invalid token.", 403)
-                elif result['status'] == 'ok':
-                    # All okay.
-                    # If the user is unknown, make a new user. If the user is known, don't update scoped data
-                    g.user = self.usermanager.load_user_userinfo(result['userinfo'], token=None, update=False)
-                    g.lastuserinfo = self.usermanager.make_userinfo(g.user)
-                    signal_user_looked_up.send(g.user)
-                    return f(result, *args, **kw)
+                return
+                # FIXME: resource_handler no longer works
+                return f(result, *args, **kw)
             self.resources[name] = {
                 'name': name,
                 'description': description,
