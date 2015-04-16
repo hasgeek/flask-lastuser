@@ -157,6 +157,7 @@ class UserManagerBase(object):
         """
         user = None
         g.access_scope = []
+        g.lastuserinfo = None
         user_from_token = False
 
         # Look for a valid auth token that maps to a user
@@ -205,8 +206,6 @@ class UserManagerBase(object):
                 if session.get('lastuser_userid') != user.userid:
                     # Merged account loaded. Switch over
                     session['lastuser_userid'] = user.userid
-        else:
-            g.lastuserinfo = None
 
         # This will be set to True by the various login_required handlers downstream
         g.login_required = False
