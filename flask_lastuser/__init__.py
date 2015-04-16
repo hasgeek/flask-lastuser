@@ -359,7 +359,7 @@ class Lastuser(object):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             g.login_required = True
-            if g.lastuserinfo is None:
+            if hasattr(g, 'lastuserinfo') and g.lastuserinfo is None:
                 if not self._login_handler:
                     abort(403)
                 return redirect(url_for(self._login_handler.__name__,
