@@ -156,6 +156,8 @@ class UserManagerBase(object):
         setting g.user and g.lastuserinfo
         """
         user = None
+        # Set g.* in case token auth fails and this method raises an exception
+        g.user = None
         g.access_scope = []
         g.lastuserinfo = None
         user_from_token = False
