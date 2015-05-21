@@ -156,9 +156,7 @@ class UserManagerBase(object):
         setting g.user and g.lastuserinfo
         """
         user = None
-        # Set g.* in case token auth fails and this method raises an exception
-        g.user = None
-        g.access_scope = []
+        token_error = None
         g.lastuserinfo = None
         user_from_token = False
 
@@ -166,7 +164,8 @@ class UserManagerBase(object):
         try:
             user = self.token_auth(header_only=True)
         except LastuserTokenAuthException as e:
-            return resource_auth_error(unicode(e))
+            token_error = e
+            user = None
         if user:
             user_from_token = True
         else:
@@ -212,6 +211,9 @@ class UserManagerBase(object):
         # This will be set to True by the various login_required handlers downstream
         g.login_required = False
         signal_user_looked_up.send(g.user)
+
+        if token_error is not None:
+            return resource_auth_error(unicode(token_error))
 
     def login_listener(self, userinfo, token):
         """
