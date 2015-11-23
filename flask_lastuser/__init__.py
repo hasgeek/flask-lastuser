@@ -637,11 +637,14 @@ class Lastuser(object):
             'POST': requests.post}[method](
                 self.endpoint_url(endpoint),
                 auth=(self.client_id, self.client_secret),
-                data=kwargs)
+                data=kwargs, headers={'Accept': 'application/json'})
         if r.status_code in (400, 500, 401):
             raise LastuserApiException("Call to %s returned %d" % (endpoint, r.status_code))
         elif r.status_code in (200, 201, 202, 203):
             return r.json()
+        else:
+            raise LastuserApiException("Call to %s returned unknown status %d and response %s " % (
+                endpoint, r.status_code, r.text))
 
     def sync_resources(self):
         return self._lastuser_api_call(self.syncresources_endpoint, resources=json.dumps(self.resources))
