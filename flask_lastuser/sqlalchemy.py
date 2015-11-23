@@ -15,6 +15,7 @@ from flask import g, current_app
 from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, Table,
     PrimaryKeyConstraint, UniqueConstraint, MetaData)
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declared_attr
 from flask.ext.lastuser import UserInfo, UserManagerBase, signal_user_looked_up, __
 from coaster.utils import getbool, make_name, LabeledEnum
@@ -791,7 +792,14 @@ class UserManager(UserManagerBase):
         if user is None:
             if create:
                 user = self.usermodel(userid=userid)
-                self.db.session.add(user)
+                # We don't have the benefit of assuming add_and_commit is available here,
+                # so replicate its behaviour.
+                self.db.session.begin_nested()
+                try:
+                    self.db.session.add(user)
+                    self.db.session.commit()
+                except IntegrityError:
+                    user = self.usermodel.query.filter_by(userid=userid).one()
         return user
 
     def load_user_by_username(self, username):
