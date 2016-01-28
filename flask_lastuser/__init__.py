@@ -19,6 +19,7 @@ try:
     from collections import OrderedDict
 except ImportError:
     from ordereddict import OrderedDict
+from coaster.utils import getbool
 from coaster.views import get_current_url, get_next_url
 
 from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json
@@ -448,6 +449,7 @@ class Lastuser(object):
         def decorated_function(*args, **kwargs):
             g.login_required = True
             data = f(*args, **kwargs)
+            metarefresh = getbool(request.args.get('metarefresh'))
             if 'cookietest' in request.args:
                 next = get_next_url()
             else:
@@ -475,11 +477,11 @@ class Lastuser(object):
             message = data.get('message') or request.args.get('message')
             if isinstance(message, unicode):
                 message = message.encode('utf-8')
-            return self._login_handler_internal(scope, next, message)
+            return self._login_handler_internal(scope, next, message, metarefresh)
         self._login_handler = f
         return decorated_function
 
-    def _login_handler_internal(self, scope, next, message=None):
+    def _login_handler_internal(self, scope, next, message=None, metarefresh=False):
         if not self._redirect_uri_name:
             raise LastuserConfigException("No authorization handler defined")
         session['lastuser_state'] = randomstring()
@@ -488,14 +490,25 @@ class Lastuser(object):
         # Discard currently logged in user
         session.pop('lastuser_sessionid', None)
         session.pop('lastuser_userid', None)
-        return redirect('%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
+        login_redirect_url = '%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
             urllib.urlencode([
                 ('client_id', self.client_id),
                 ('response_type', 'code'),
                 ('scope', scope),
                 ('state', session['lastuser_state']),
                 ('redirect_uri', session['lastuser_redirect_uri']),
-                ] + ([('message', message)] if message else []))))
+                ] + ([('message', message)] if message else [])))
+        if not metarefresh:
+            return redirect(login_redirect_url)
+        else:
+            return Response(
+                u'''<!DOCTYPE html>
+                <html><head><title>Redirecting...</title><meta http-equiv="Refresh" content="0; {url}" /></head>
+                <body>Redirecting to <a href="{url}">{url}</a></body></html>'''.format(url=login_redirect_url),
+                200, {
+                    'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
+                    'Cache-Control': 'private, max-age=86400'
+                    })
 
     def logout_handler(self, f):
         """
