@@ -9,6 +9,7 @@ SQLAlchemy extensions for Flask-Lastuser.
 from __future__ import absolute_import
 
 import urlparse
+import requests
 from pytz import timezone
 from werkzeug import cached_property
 from flask import g, current_app
@@ -801,6 +802,23 @@ class UserManager(UserManagerBase):
                 except IntegrityError:
                     user = self.usermodel.query.filter_by(userid=userid).one()
         return user
+
+    def create_user(self, email, template=None):
+        """
+        Creates a user on lastuser with an email and returns it
+        """
+        print ((self.lastuser.client_id, self.lastuser.client_secret))
+        r = requests.post(urlparse.urljoin(self.lastuser.lastuser_server, '/api/1/user/new'),
+            auth=(self.lastuser.client_id, self.lastuser.client_secret), data={
+                'email': email,
+                'template': template if template else ''
+            })
+        result = r.json()
+
+        if result.get('status') == 'ok':
+            return self.load_user(result['results']['userid'], create=True)
+        else:
+            return None
 
     def load_user_by_username(self, username):
         if hasattr(self.usermodel, 'get'):

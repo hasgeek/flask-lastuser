@@ -324,6 +324,7 @@ class Lastuser(object):
         self.external_resource('phone', self.endpoint_url('api/1/phone'), 'GET')
         self.external_resource('phone/add', self.endpoint_url('api/1/phone/add'), 'POST')
         self.external_resource('phone/remove', self.endpoint_url('api/1/phone/remove'), 'POST')
+        self.external_resource('user/new', self.endpoint_url('/api/1/user/new'), 'POST')
         self.external_resource('organizations', self.endpoint_url('api/1/organizations'), 'GET')
         self.external_resource('teams', self.endpoint_url('api/1/teams'), 'GET')
         self.external_resource('session/verify', self.endpoint_url('api/1/session/verify'), 'POST')
