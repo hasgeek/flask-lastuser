@@ -389,7 +389,7 @@ class Lastuser(object):
 
         # Set login cookie, but only if there's a user or an existing login cookie
         # This prevents sending a cookie during an API call with no incoming cookie
-        if 'lastuser' in request.cookies or g.lastuser_cookie:
+        if 'lastuser' in request.cookies or (hasattr(g, 'lastuser_cookie') and g.lastuser_cookie):
             expires = datetime.utcnow() + timedelta(days=365)
             response.set_cookie('lastuser',
                 value=self.serializer.dumps(g.lastuser_cookie, header_fields={'v': 1}),
