@@ -875,6 +875,7 @@ class UserManager(UserManagerBase):
 
         self.update_teams(user)
         signal_user_looked_up.send(g.user)
+        return user
 
     def update_teams(self, user):
         # Are we tracking teams? Sync data from Lastuser.

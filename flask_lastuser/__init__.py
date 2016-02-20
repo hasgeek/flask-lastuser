@@ -9,11 +9,13 @@ Lastuser extension for Flask
 from __future__ import absolute_import
 from functools import wraps
 import uuid
+from datetime import datetime, timedelta
 import urlparse
 import requests
 import urllib
 import re
 import weakref
+import itsdangerous
 from flask.ext.babelex import Domain
 try:
     from collections import OrderedDict
@@ -22,7 +24,7 @@ except ImportError:
 from coaster.utils import getbool
 from coaster.views import get_current_url, get_next_url
 
-from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json
+from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json, current_app
 from flask.signals import Namespace
 
 from . import translations
@@ -143,7 +145,7 @@ class UserManagerBase(object):
             result = self.lastuser._lastuser_api_call(self.lastuser.tokenverify_endpoint, resource=resource, access_token=token)
         if self.lastuser.cache:
             self.lastuser.cache.set(cache_key, result, timeout=300)
-        if result['status'] == 'error':
+        if result['status'] == 'error' or 'userinfo' not in result:
             raise LastuserTokenAuthException(u"Invalid token.")
         elif result['status'] == 'ok':
             # All okay.
@@ -161,6 +163,21 @@ class UserManagerBase(object):
         g.lastuserinfo = None
         user_from_token = False
 
+        g.lastuser_cookie = {}
+
+        # Migrate data from Flask cookie session
+        if 'lastuser_sessionid' in session:
+            g.lastuser_cookie['sessionid'] = session.pop('lastuser_sessionid')
+        if 'lastuser_userid' in session:
+            g.lastuser_cookie['userid'] = session.pop('lastuser_userid')
+
+        if 'lastuser' in request.cookies:
+            try:
+                g.lastuser_cookie, lastuser_cookie_headers = self.lastuser.serializer.loads(
+                    request.cookies['lastuser'], return_header=True)
+            except itsdangerous.BadSignature:
+                g.lastuser_cookie = {}
+
         # Look for a valid auth token that maps to a user
         try:
             user = self.token_auth(header_only=True)
@@ -172,16 +189,21 @@ class UserManagerBase(object):
         else:
             if self.lastuser.cache and self.lastuser.use_sessions:
                 # If this app has a cache and sessions aren't explicitly disabled, use sessions
-                if 'lastuser_sessionid' in session and 'lastuser_userid' in session:
+                if 'sessionid' in g.lastuser_cookie and 'userid' in g.lastuser_cookie:
                     # We have a sessionid and userid. Load user and verify the session
-                    user = self.load_user(session['lastuser_userid'])
+                    user = self.load_user(g.lastuser_cookie['userid'])
+                    if not user:
+                        # Are we in a subdomain with a parent domain cookie, with a completely
+                        # new user? Try loading this user from Lastuser and obtaining an
+                        # access_token if we're a trusted client.
+                        user = self.lastuser.login_from_cookie(g.lastuser_cookie['userid'])
                     if user:
-                        cache_key = ('lastuser/session/' + session['lastuser_sessionid']).encode('utf-8')
+                        cache_key = ('lastuser/session/' + g.lastuser_cookie['sessionid']).encode('utf-8')
                         sessiondata = self.lastuser.cache.get(cache_key)
                         fresh_data = False
                         if not sessiondata:
                             sessiondata = self.lastuser.session_verify(
-                                session['lastuser_sessionid'], user)
+                                g.lastuser_cookie['sessionid'], user)
                             fresh_data = True
                         if sessiondata.get('active'):
                             self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
@@ -192,22 +214,24 @@ class UserManagerBase(object):
                             user = None
                             if fresh_data:
                                 signal_user_session_expired.send(user)
-            elif 'lastuser_userid' in session:
-                user = self.load_user(session['lastuser_userid'])
+            elif 'userid' in g.lastuser_cookie:
+                user = self.load_user(g.lastuser_cookie['userid'])
+                if not user:
+                    # As above, try to create user record
+                    user = self.lastuser.login_from_cookie(g.lastuser_cookie['userid'])
 
         if not user:
-            session.pop('lastuser_userid', None)
-            session.pop('lastuser_sessionid', None)
-            session.permanent = False
+            g.lastuser_cookie.pop('userid', None)
+            g.lastuser_cookie.pop('sessionid', None)
 
         g.user = user
         if user:
             g.access_scope = ['*']  # TODO: In future, restrict to access token's scope
             g.lastuserinfo = self.make_userinfo(user)
             if not user_from_token:
-                if session.get('lastuser_userid') != user.userid:
+                if g.lastuser_cookie.get('userid') != user.userid:
                     # Merged account loaded. Switch over
-                    session['lastuser_userid'] = user.userid
+                    g.lastuser_cookie['userid'] = user.userid
 
         # This will be set to True by the various login_required handlers downstream
         g.login_required = False
@@ -307,6 +331,7 @@ class Lastuser(object):
 
         self.syncresources_endpoint = app.config.get('LASTUSER_ENDPOINT_REGISTER_RESOURCE', 'api/1/resource/sync')
         self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
+        self.tokengetscope_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENGETSCOPE', 'api/1/token/get_scope')
         self.getuser_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
         self.getusers_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/getusers')
         self.getuser_userid_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
@@ -315,6 +340,10 @@ class Lastuser(object):
         self.client_id = app.config['LASTUSER_CLIENT_ID']
         self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
         self.use_sessions = app.config.get('LASTUSER_USE_SESSIONS', True)
+
+        # Setup cookie serializer
+        self.serializer = itsdangerous.JSONWebSignatureSerializer(
+            app.config.get('LASTUSER_SECRET_KEY') or app.config['SECRET_KEY'])
 
         # Register known external resources provided by Lastuser itself
         self.external_resource('id', self.endpoint_url('api/1/id'), 'GET')
@@ -342,11 +371,13 @@ class Lastuser(object):
 
     def after_request(self, response):
         """
-        Tell proxies to not publicly cache pages. If you are using Flask-Lastuser,
-        your app takes user logins and pages for a user should not be cached by proxies.
+        Save login status cookie and tell proxies to not publicly cache pages.
+        If you are using Flask-Lastuser, your app takes user logins, and pages
+        for a user should not be cached by proxies.
 
-        Warning: this will also be applied to static pages if served through your app.
-        Static resources should be served by downstream servers without involving Python code.
+        Warning: this will also be applied to static pages if served through
+        your app. Static resources should be served by downstream servers
+        without involving Python code.
         """
         if 'Expires' not in response.headers:
             response.headers['Expires'] = 'Fri, 01 Jan 1990 00:00:00 GMT'
@@ -355,6 +386,17 @@ class Lastuser(object):
                 response.headers['Cache-Control'] = 'private, ' + response.headers['Cache-Control']
         else:
             response.headers['Cache-Control'] = 'private'
+
+        # Set login cookie, but only if there's a user or an existing login cookie
+        # This prevents sending a cookie during an API call with no incoming cookie
+        if 'lastuser' in request.cookies or g.lastuser_cookie:
+            expires = datetime.utcnow() + timedelta(days=365)
+            response.set_cookie('lastuser',
+                value=self.serializer.dumps(g.lastuser_cookie, header_fields={'v': 1}),
+                max_age=31557600,                                         # Keep this cookie for a year.
+                expires=expires,                                          # Expire one year from now.
+                domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),  # Place cookie in master domain.
+                httponly=True)                                            # Don't allow reading this from JS.
         return response
 
     def requires_login(self, f):
@@ -488,8 +530,8 @@ class Lastuser(object):
         session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
                 next=next, _external=True)
         # Discard currently logged in user
-        session.pop('lastuser_sessionid', None)
-        session.pop('lastuser_userid', None)
+        g.lastuser_cookie.pop('sessionid', None)
+        g.lastuser_cookie.pop('userid', None)
         login_redirect_url = '%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
             urllib.urlencode([
                 ('client_id', self.client_id),
@@ -503,11 +545,11 @@ class Lastuser(object):
         else:
             return Response(
                 u'''<!DOCTYPE html>
-                <html><head><title>Redirecting...</title><meta http-equiv="Refresh" content="0; {url}" /></head>
-                <body>Redirecting to <a href="{url}">{url}</a></body></html>'''.format(url=login_redirect_url),
+                <html><head><title>Redirecting…</title><meta http-equiv="refresh" content="0; {url}" /></head>
+                <body><a href="{url}">Logging you in…</a></body></html>'''.format(url=login_redirect_url),
                 200, {
                     'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
-                    'Cache-Control': 'private, max-age=86400'
+                    'Cache-Control': 'private, no-cache'
                     })
 
     def logout_handler(self, f):
@@ -519,21 +561,26 @@ class Lastuser(object):
             g.login_required = True
             next = f(*args, **kwargs)
             g.lastuserinfo = None
-            session.pop('lastuser_sessionid', None)
-            session.pop('lastuser_userid', None)
-            session.permanent = False
+            g.lastuser_cookie.pop('sessionid', None)
+            g.lastuser_cookie.pop('userid', None)
             if not (next.startswith('http:') or next.startswith('https:')):
                 next = urlparse.urljoin(request.url_root, next)
-            return Response('<!DOCTYPE html>\n'
-                '<html><head><meta http-equiv="refresh" content="0; url=%(url)s"></head>\n'
-                '<body>Logging you out...</body></html>' % {
-                    'url': urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
-                    % (urllib.quote(self.client_id), urllib.quote(next))})
+            return Response(u'''<!DOCTYPE html>
+                <html><head><meta http-equiv="refresh" content="0; {url}" /></head>
+                <body><a href="{url}">Logging you out…</a></body></html>'''.format(
+                url=urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
+                % (urllib.quote(self.client_id), urllib.quote(next))),
+                200, {
+                    'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
+                    'Cache-Control': 'private, no-cache'
+                    })
         return decorated_function
 
     def auth_handler(self, f):
         """
         Set the login cookies.
+
+        This method closely resembles :meth:`login_from_cookie`.
         """
         @wraps(f)
         def decorated_function(*args, **kw):
@@ -591,9 +638,10 @@ class Lastuser(object):
             # Step 4.3: Save user info received
             userinfo = result.get('userinfo', {})
             if 'sessionid' in userinfo and self.use_sessions:
-                session['lastuser_sessionid'] = userinfo.pop('sessionid')
-            session['lastuser_userid'] = userinfo['userid']
-            session.permanent = True
+                # Remove sessionid from userinfo as it's session-specific data
+                # while the rest of userinfo is longterm
+                g.lastuser_cookie['sessionid'] = userinfo.pop('sessionid')
+            g.lastuser_cookie['userid'] = userinfo['userid']
             # Step 4.4: Connect to a user manager if there is one
             if self.usermanager:
                 self.usermanager.login_listener(userinfo, token)
@@ -601,6 +649,39 @@ class Lastuser(object):
             return f(*args, **kw)
         self._redirect_uri_name = f.__name__
         return decorated_function
+
+    def login_from_cookie(self, userid):
+        """
+        This user has just showed up with a cookie set by lastuser, but with no
+        internal record. We treat it like a login now.
+
+        This method closely resembles :meth:`auth_handler`.
+        """
+        r = requests.post(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
+            auth=(self.client_id, self.client_secret),
+            data={'userid': userid,
+                  'grant_type': 'client_credentials',
+                  'scope': self._login_handler().get('scope', '')})
+        result = r.json()
+
+        if 'error' in result:
+            # Lastuser doesn't like us. Maybe we're not a trusted app. Ignore and move on.
+            return
+
+        if 'messages' in result:
+            for item in result['messages']:
+                flash(item['message'], item['category'])
+        token = {
+            'access_token': result.get('access_token'),
+            'token_type': result.get('token_type'),
+            'scope': result.get('scope'),
+            }
+        userinfo = result['userinfo']
+        if 'sessionid' in userinfo and self.use_sessions:
+            g.lastuser_cookie['sessionid'] = userinfo.pop('sessionid')
+        g.lastuser_cookie['userid'] = userinfo['userid']
+        if self.usermanager:
+            return self.usermanager.login_listener(userinfo, token)
 
     def auth_error_handler(self, f):
         """
