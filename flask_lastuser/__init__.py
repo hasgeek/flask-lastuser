@@ -389,15 +389,16 @@ class Lastuser(object):
 
         # Set login cookie, but only if there's a user or an existing login cookie
         # This prevents sending a cookie during an API call with no incoming cookie
-        if 'lastuser' in request.cookies or (hasattr(g, 'lastuser_cookie') and g.lastuser_cookie):
-            expires = datetime.utcnow() + timedelta(days=365)
-            response.set_cookie('lastuser',
-                value=self.serializer.dumps(g.lastuser_cookie, header_fields={'v': 1}),
-                max_age=31557600,                                         # Keep this cookie for a year.
-                expires=expires,                                          # Expire one year from now.
-                domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),  # Place cookie in master domain.
-                httponly=True)                                            # Don't allow reading this from JS.
-        return response
+        if hasattr(g, 'lastuser_cookie'):  # There won't be a g.lastuser_cookie if this is a 400 Bad Request
+            if 'lastuser' in request.cookies or g.lastuser_cookie:
+                expires = datetime.utcnow() + timedelta(days=365)
+                response.set_cookie('lastuser',
+                    value=self.serializer.dumps(g.lastuser_cookie, header_fields={'v': 1}),
+                    max_age=31557600,                                         # Keep this cookie for a year.
+                    expires=expires,                                          # Expire one year from now.
+                    domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),  # Place cookie in master domain.
+                    httponly=True)                                            # Don't allow reading this from JS.
+            return response
 
     def requires_login(self, f):
         """
