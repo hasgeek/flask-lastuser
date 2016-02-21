@@ -609,6 +609,7 @@ class Lastuser(object):
             # Step 2: Get the auth token
             r = requests.post(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
                 auth=(self.client_id, self.client_secret),
+                headers={'Accept': 'application/json'},
                 data={'code': code,
                       'redirect_uri': session.get('lastuser_redirect_uri'),
                       'grant_type': 'authorization_code',
@@ -659,6 +660,7 @@ class Lastuser(object):
         """
         r = requests.post(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
             auth=(self.client_id, self.client_secret),
+            headers={'Accept': 'application/json'},
             data={'userid': userid,
                   'grant_type': 'client_credentials',
                   'scope': self._login_handler().get('scope', '')})
