@@ -398,7 +398,7 @@ class Lastuser(object):
                     expires=expires,                                          # Expire one year from now.
                     domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),  # Place cookie in master domain.
                     httponly=True)                                            # Don't allow reading this from JS.
-            return response
+        return response
 
     def requires_login(self, f):
         """
