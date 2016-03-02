@@ -799,6 +799,7 @@ class UserManager(UserManagerBase):
                     self.db.session.add(user)
                     self.db.session.commit()
                 except IntegrityError:
+                    self.db.session.rollback()
                     user = self.usermodel.query.filter_by(userid=userid).one()
         return user
 
