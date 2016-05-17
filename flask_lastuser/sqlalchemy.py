@@ -527,6 +527,11 @@ class ProfileMixin(object):
         """Synonym for buid if the model has no existing userid column."""
         return synonym('buid')
 
+    def owner_is(self, user):
+        if not user:
+            return False
+        return self.userid == user.userid or self.userid in user.organizations_owned_ids()
+
     @property
     def pickername(self):
         if self.userid == self.name:
