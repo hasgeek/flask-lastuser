@@ -807,7 +807,6 @@ class UserManager(UserManagerBase):
         """
         Creates a user on lastuser with an email and returns it
         """
-        print ((self.lastuser.client_id, self.lastuser.client_secret))
         r = requests.post(urlparse.urljoin(self.lastuser.lastuser_server, '/api/1/user/new'),
             auth=(self.lastuser.client_id, self.lastuser.client_secret), data={
                 'email': email,
