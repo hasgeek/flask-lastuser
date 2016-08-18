@@ -8,6 +8,7 @@ SQLAlchemy extensions for Flask-Lastuser.
 
 from __future__ import absolute_import
 
+from collections import defaultdict
 import urlparse
 from pytz import timezone
 from werkzeug import cached_property
@@ -200,6 +201,15 @@ class UserBase(BaseMixin):
             userid = userid.userid
         return userid in self.user_organizations_memberof_ids()
 
+    def team_info(self):
+        return self.userinfo.get('teams')
+
+    def team_ids(self):
+        return [team['userid'] for team in self.userinfo.get('teams', [])]
+
+    def user_team_ids(self):
+        return [self.userid] + [team['userid'] for team in self.userinfo.get('teams', [])]
+
     @property
     def profile_url(self):
         """URL to the user's profile. Can be overidden by subclasses"""
@@ -226,6 +236,20 @@ class UserBase(BaseMixin):
         """Return userids and titles of users and owned organizations for selection lists."""
         return [(self.userid, self.pickername)] + [
             (o['userid'], u'{title} (~{name})'.format(title=o['title'], name=o['name'])) for o in self.organizations_owned()]
+
+    def teamowner_choices(self):
+        """
+        Return userids and titles of user and all teams the user is a member of, grouped by organization.
+        """
+        orgs = {org['userid']: org for byorgtype in self.userinfo.get('organizations', {}).values()
+            for org in byorgtype}
+        teamsbyorg = defaultdict(list)
+        for team in self.userinfo.get('teams', []):
+            teamsbyorg[team['org']].append(team)
+        return [(self.userid, self.pickername)] + [
+            (orgs.get(orgid, {}).get('title', ''),
+                [(team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])) for team in sorted(teams, key=lambda t: t['title'])])
+            for orgid, teams in sorted(teamsbyorg.items(), key=lambda row: orgs.get(row[0], {}).get('title'))]
 
     # NOTE: Compatibility definition, please do not use in new code
     user_organization_owned_ids = user_organizations_owned_ids
