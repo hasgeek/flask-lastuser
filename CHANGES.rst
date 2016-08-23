@@ -7,6 +7,7 @@
 * New helper methods owner_choices(), owner_of, member_of in UserBase.
 * Login beacon endpoint and object availability as g.lastuser.
 * Switch to g.lastuser_cookie for cross-domain login cookie.
+* Support for team ownership of resources via helper methods (team, allowner, etc).
 
 0.3.14
 ------

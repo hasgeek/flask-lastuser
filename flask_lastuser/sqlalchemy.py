@@ -210,6 +210,14 @@ class UserBase(BaseMixin):
     def user_team_ids(self):
         return [self.userid] + [team['userid'] for team in self.userinfo.get('teams', [])]
 
+    def teammember_of(self, userid):
+        if not isinstance(userid, basestring):
+            userid = userid.userid
+        return userid in self.team_ids()
+
+    def allowner_ids(self):
+        return [self.userid] + self.organizations_owned_ids() + self.team_ids()
+
     @property
     def profile_url(self):
         """URL to the user's profile. Can be overidden by subclasses"""
@@ -247,9 +255,34 @@ class UserBase(BaseMixin):
         for team in self.userinfo.get('teams', []):
             teamsbyorg[team['org']].append(team)
         return [(self.userid, self.pickername)] + [
-            (orgs.get(orgid, {}).get('title', ''),
+            (u'{title} (~{name})'.format(title=orgs.get(orgid, {}).get('title', ''), name=orgs.get(orgid, {}).get('name', '')),
                 [(team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])) for team in sorted(teams, key=lambda t: t['title'])])
             for orgid, teams in sorted(teamsbyorg.items(), key=lambda row: orgs.get(row[0], {}).get('title'))]
+
+    def allowner_choices(self):
+        """
+        Return userids and titles of the user, all organizations owned by the user, and all teams the user
+        is a member of
+        """
+        orgs = {org['userid']: org for byorgtype in self.userinfo.get('organizations', {}).values()
+            for org in byorgtype}
+        teamsbyorg = defaultdict(list)
+        for team in self.userinfo.get('teams', []):
+            teamsbyorg[team['org']].append(team)
+        for orgid in orgs:
+            if orgid not in teamsbyorg:
+                teamsbyorg[orgid] = []
+        orgids = sorted(teamsbyorg.keys(), key=lambda orgid: orgs.get(orgid, {}).get('title'))
+        ownedids = set(self.organizations_owned_ids())
+
+        result = [(self.userid, self.pickername)]
+        for orgid in orgids:
+            if orgid in ownedids:
+                result.append((orgid, u'{title} (~{name})'.format(title=orgs[orgid]['title'], name=orgs[orgid]['name'])))
+            for team in sorted(teamsbyorg[orgid], key=lambda team: team['title']):
+                result.append((team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])))
+
+        return result
 
     # NOTE: Compatibility definition, please do not use in new code
     user_organization_owned_ids = user_organizations_owned_ids
