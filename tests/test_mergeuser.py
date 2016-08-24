@@ -193,7 +193,7 @@ class TestUserMerge(TestMergeUserData):
                     "userid": "1234567890123456789012",
                     "name": "user1",
                     "title": "User 1",
-                    "label": "User 1 (~user1)",
+                    "label": "User 1 (@user1)",
                     "oldids": ['0987654321098765432109'],
                     "timezone": "Asia/Kolkata",
                     }

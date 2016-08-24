@@ -8,6 +8,7 @@
 * Login beacon endpoint and object availability as g.lastuser.
 * Switch to g.lastuser_cookie for cross-domain login cookie.
 * Support for team ownership of resources via helper methods (team, allowner, etc).
+* Switch from ~username to @username.
 
 0.3.14
 ------

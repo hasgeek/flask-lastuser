@@ -232,7 +232,7 @@ class UserBase(BaseMixin):
     def pickername(self):
         """Label name for this user, for identifying them in dropdown lists"""
         if self.username:
-            return u"{fullname} (~{username})".format(fullname=self.fullname, username=self.username)
+            return u"{fullname} (@{username})".format(fullname=self.fullname, username=self.username)
         else:
             return self.fullname
 
@@ -243,7 +243,7 @@ class UserBase(BaseMixin):
     def owner_choices(self):
         """Return userids and titles of users and owned organizations for selection lists."""
         return [(self.userid, self.pickername)] + [
-            (o['userid'], u'{title} (~{name})'.format(title=o['title'], name=o['name'])) for o in self.organizations_owned()]
+            (o['userid'], u'{title} (@{name})'.format(title=o['title'], name=o['name'])) for o in self.organizations_owned()]
 
     def teamowner_choices(self):
         """
@@ -255,7 +255,7 @@ class UserBase(BaseMixin):
         for team in self.userinfo.get('teams', []):
             teamsbyorg[team['org']].append(team)
         return [(self.userid, self.pickername)] + [
-            (u'{title} (~{name})'.format(title=orgs.get(orgid, {}).get('title', ''), name=orgs.get(orgid, {}).get('name', '')),
+            (u'{title} (@{name})'.format(title=orgs.get(orgid, {}).get('title', ''), name=orgs.get(orgid, {}).get('name', '')),
                 [(team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])) for team in sorted(teams, key=lambda t: t['title'])])
             for orgid, teams in sorted(teamsbyorg.items(), key=lambda row: orgs.get(row[0], {}).get('title'))]
 
@@ -278,7 +278,7 @@ class UserBase(BaseMixin):
         result = [(self.userid, self.pickername)]
         for orgid in orgids:
             if orgid in ownedids:
-                result.append((orgid, u'{title} (~{name})'.format(title=orgs[orgid]['title'], name=orgs[orgid]['name'])))
+                result.append((orgid, u'{title} (@{name})'.format(title=orgs[orgid]['title'], name=orgs[orgid]['name'])))
             for team in sorted(teamsbyorg[orgid], key=lambda team: team['title']):
                 result.append((team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])))
 
@@ -594,7 +594,7 @@ class ProfileMixin(object):
         if self.userid == self.name:
             return self.title
         else:
-            return u'{title} (~{name})'.format(title=self.title, name=self.name)
+            return u'{title} (@{name})'.format(title=self.title, name=self.name)
 
     def permissions(self, user, inherited=None):
         parent = super(ProfileMixin, self)
