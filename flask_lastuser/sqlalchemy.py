@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-flask.ext.lastuser.sqlalchemy
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+flask_lastuser.sqlalchemy
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 SQLAlchemy extensions for Flask-Lastuser.
 """
@@ -18,7 +18,7 @@ from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, T
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declared_attr
-from flask.ext.lastuser import UserInfo, UserManagerBase, signal_user_looked_up, __
+from flask_lastuser import UserInfo, UserManagerBase, signal_user_looked_up, __
 from coaster.utils import getbool, make_name, LabeledEnum
 from coaster.sqlalchemy import make_timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
 

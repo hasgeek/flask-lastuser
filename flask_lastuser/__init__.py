@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-flask.ext.lastuser
-~~~~~~~~~~~~~~~~~~
+flask_lastuser
+~~~~~~~~~~~~~~
 
 Lastuser extension for Flask
 """
@@ -16,7 +16,7 @@ import urllib
 import re
 import weakref
 import itsdangerous
-from flask.ext.babelex import Domain
+from flask_babelex import Domain
 try:
     from collections import OrderedDict
 except ImportError:

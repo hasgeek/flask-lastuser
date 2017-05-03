@@ -3,8 +3,8 @@
 import unittest
 import httpretty
 from flask import Flask, json
-from flask.ext.lastuser import Lastuser
-from flask.ext.lastuser.sqlalchemy import UserManager
+from flask_lastuser import Lastuser
+from flask_lastuser.sqlalchemy import UserManager
 from models import db, User, Team, Profile
 
 # -- Tests --------------------------------------------------------------------
