@@ -1,7 +1,7 @@
 Flask-Lastuser
 ==============
 
-|docs| travis| |coveralls|
+|docs| |travis| |coveralls|
 
 .. |docs| image:: https://readthedocs.org/projects/flask-lastuser/badge/?version=latest
     :target: http://flask-lastuser.readthedocs.io/en/latest/?badge=latest
