@@ -14,11 +14,11 @@ else:
     raise RuntimeError("Unable to find version string in flask_lastuser/_version.py.")
 
 requires = [
+    'coaster>=0.3.1',
+    'SQLAlchemy>=0.8',
+    'Flask-BabelEx',
     'Flask',
     'requests',
-    'SQLAlchemy>=0.8',
-    'coaster>=0.3.1',
-    'Flask-BabelEx',
     ]
 
 setup(
