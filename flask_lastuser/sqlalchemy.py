@@ -16,11 +16,10 @@ from flask import g, current_app
 from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, Table,
     PrimaryKeyConstraint, UniqueConstraint, MetaData)
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declared_attr
 from flask_lastuser import UserInfo, UserManagerBase, signal_user_looked_up, __
 from coaster.utils import getbool, make_name, LabeledEnum
-from coaster.sqlalchemy import make_timestamp_columns, BaseMixin, JsonDict, BaseNameMixin
+from coaster.sqlalchemy import make_timestamp_columns, failsafe_add, BaseMixin, JsonDict, BaseNameMixin
 
 
 __all__ = ['UserBase', 'UserBase2', 'TeamMixin', 'TeamMembersMixin', 'TeamBase', 'TeamBase2',
@@ -844,9 +843,11 @@ class UserManager(UserManagerBase):
         if teammodel is not None:
             self.users_teams = make_user_team_table(db.Model)
 
-    def load_user(self, userid, create=False):
+    def load_user(self, userid, uuid=None, create=False):
         # TODO: How do we cache this? Connect to a cache manager
-        if hasattr(self.usermodel, 'get'):
+        if uuid and hasattr(self.usermodel, '__uuid_primary_key__') and self.usermodel.__uuid_primary_key__:
+            user = self.usermodel.query.get(uuid)  # This loads from SQLAlchemy session cache
+        elif hasattr(self.usermodel, 'get'):
             user = self.usermodel.get(userid=userid, defercols=False)
         else:
             user = self.usermodel.query.filter_by(userid=userid
@@ -854,15 +855,9 @@ class UserManager(UserManagerBase):
         if user is None:
             if create:
                 user = self.usermodel(userid=userid)
-                # We don't have the benefit of assuming add_and_commit is available here,
-                # so replicate its behaviour.
-                self.db.session.begin_nested()
-                try:
-                    self.db.session.add(user)
-                    self.db.session.commit()
-                except IntegrityError:
-                    self.db.session.rollback()
-                    user = self.usermodel.query.filter_by(userid=userid).one()
+                if uuid and hasattr(self.usermodel, '__uuid_primary_key__') and self.usermodel.__uuid_primary_key__:
+                    user.id = uuid
+                failsafe_add(self.db.session, user, userid=userid)
         return user
 
     def load_user_by_username(self, username):
@@ -886,7 +881,7 @@ class UserManager(UserManagerBase):
         """
         Load a user and update data from the userinfo.
         """
-        user = self.load_user(userinfo['userid'], create=True)
+        user = self.load_user(userid=userinfo['userid'], uuid=userinfo.get('uuid'), create=True)
 
         # Watch for username/email conflicts. Remove from any existing user
         # that have the same username or email, for a conflict can only mean
