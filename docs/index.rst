@@ -3,11 +3,12 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to flask-lastuser's documentation!
+Welcome to Flask-Lastuser's documentation!
 ==========================================
 
-Flask-lastuser's documentation
+Flask-Lastuser's documentation
 ******************************
+
 Flask extension for Lastuser.
  :license: BSD, see LICENSE for more details.
 
