@@ -18,7 +18,7 @@ from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, T
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask_lastuser import UserInfo, UserManagerBase, signal_user_looked_up, __
-from coaster.utils import getbool, make_name, require_one_of LabeledEnum
+from coaster.utils import getbool, make_name, require_one_of, LabeledEnum
 from coaster.sqlalchemy import make_timestamp_columns, failsafe_add, BaseMixin, JsonDict, BaseNameMixin
 
 
