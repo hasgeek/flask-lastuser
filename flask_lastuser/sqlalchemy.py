@@ -18,7 +18,7 @@ from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, T
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
 from flask_lastuser import UserInfo, UserManagerBase, signal_user_looked_up, __
-from coaster.utils import getbool, make_name, LabeledEnum
+from coaster.utils import getbool, make_name, require_one_of LabeledEnum
 from coaster.sqlalchemy import make_timestamp_columns, failsafe_add, BaseMixin, JsonDict, BaseNameMixin
 
 
@@ -100,13 +100,8 @@ class UserBase(BaseMixin):
         :param str username: Username to lookup
         :param str userid: Userid to lookup
         """
-        if (not not username) + (not not userid) != 1:
-            raise TypeError("Only one of username or userid should be specified")
-
-        if userid:
-            query = cls.query.filter_by(userid=userid)
-        else:
-            query = cls.query.filter_by(username=username)
+        param, value = require_one_of(True, username=username, userid=userid)
+        query = cls.query.filter_by(**{param: value})
         if not defercols:
             query = query.options(undefer('userinfo'))
         return query.one_or_none()
@@ -701,8 +696,7 @@ class ProfileMixin(object):
 class ProfileMixin2(StatusMixin, ProfileMixin):
     @classmethod
     def get(cls, name=None, userid=None, buid=None):
-        if (not not name) + (not not userid) + (not not buid) != 1:
-            raise TypeError("Only one of name or userid or buid should be specified")
+        require_one_of(name=name, userid=userid, buid=buid)
 
         if userid:
             profile = cls.query.filter_by(userid=userid, status=USER_STATUS.ACTIVE).one_or_none()
