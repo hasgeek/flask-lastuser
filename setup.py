@@ -35,9 +35,6 @@ setup(
     zip_safe=True,
     platforms='any',
     install_requires=requires,
-    dependency_links=[
-        "https://github.com/hasgeek/coaster/archive/master.zip#egg=coaster-dev",
-        ],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
