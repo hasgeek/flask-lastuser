@@ -14,7 +14,7 @@ else:
     raise RuntimeError("Unable to find version string in flask_lastuser/_version.py.")
 
 requires = [
-    'coaster>=0.5.2',
+    'coaster>=0.6.0',
     'SQLAlchemy>=0.8',
     'Flask-BabelEx',
     'Flask',
@@ -35,6 +35,9 @@ setup(
     zip_safe=True,
     platforms='any',
     install_requires=requires,
+    dependency_links=[
+        "https://github.com/hasgeek/coaster/archive/master.zip#egg=coaster-dev",
+        ],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
@@ -44,5 +47,5 @@ setup(
         'Programming Language :: Python',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
         'Topic :: Software Development :: Libraries :: Python Modules'
-    ]
+        ]
 )
