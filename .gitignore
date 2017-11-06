@@ -5,12 +5,15 @@ test.db
 *.wpr
 .project
 .pydevproject
+.vscode
 .settings
 .sass-cache
 error.log
+ghostdriver.log
 *.egg-info
 *.egg
 .coverage
 build/
 dist/
 docs/_build
+.cache

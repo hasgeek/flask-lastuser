@@ -115,49 +115,60 @@ class UserManagerBase(object):
     def load_user_userinfo(self, userinfo, access_token, update=False):
         raise NotImplementedError("Not implemented in the base class")
 
-    def token_auth(self, resource='*', header_only=False):
+    def get_token(self, header_only):
+        token = None
+
         if 'Authorization' in request.headers:
-            token_match = auth_bearer_re.search(request.headers['Authorization'])
+            token_match = auth_bearer_re.search(
+                request.headers['Authorization'])
             if token_match:
                 token = token_match.group(1)
             else:
                 # Unrecognized Authorization header
-                raise LastuserTokenAuthException(u"A Bearer token is required in the Authorization header.")
+                raise LastuserTokenAuthException(
+                    u"A Bearer token is required in the Authorization header.")
             if 'access_token' in request.values:
-                raise LastuserTokenAuthException(u"Access token specified in both header and body.")
+                raise LastuserTokenAuthException(
+                    u"Access token specified in both header and body.")
         elif not header_only:
             # Is there an access token in the form or query?
             token = request.values.get('access_token')
         else:
-            return
+            return None
 
-        if not token:
-            return
+        return token
 
-        if resource == '*':
-            cache_key = u'lastuser/tokenverify/{token}'.format(token=token)
-        else:
-            cache_key = u'lastuser/tokenverify/{token}/{resource}'.format(token=token, resource=resource)
-        result = None
-        if self.lastuser.cache:
-            result = self.lastuser.cache.get(cache_key)
-        if result is None:
-            result = self.lastuser._lastuser_api_call(self.lastuser.tokenverify_endpoint, resource=resource, access_token=token)
-        if self.lastuser.cache:
-            self.lastuser.cache.set(cache_key, result, timeout=300)
+    def get_lastuser_cache_key(self, token):
+        return u'lastuser/tokenscope/{token}'.format(token=token)
+
+    def get_lastuser_cache(self, header_only):
+        token = self.get_token(header_only)
+        cache_key = self.get_lastuser_cache_key(token)
+
+        result = self.lastuser.cache.get(cache_key) or self.lastuser._lastuser_api_call(
+            self.lastuser.tokengetscope_endpoint, access_token=token)
+        self.lastuser.cache.set(cache_key, result, timeout=300)
+        return result
+
+    def token_auth(self, resource='*', header_only=False):
+        if not self.lastuser.cache:
+            raise LastuserException(u"No caching backend found")
+
+        result = self.get_lastuser_cache(header_only)
+
         if result['status'] == 'error' or 'userinfo' not in result:
             raise LastuserTokenAuthException(u"Invalid token.")
         elif result['status'] == 'ok':
             # All okay.
-            # If the user is unknown, make a new user. If the user is known, don't update scoped data
-            user = self.load_user_userinfo(result['userinfo'], access_token=None, update=False)
-            return user
+            if resource not in result['scope']:
+                raise LastuserTokenAuthException(u"Invalid token.")
+            else:
+                # If the user is unknown, make a new user. If the user is known, don't update scoped data
+                user = self.load_user_userinfo(result['userinfo'], access_token=None, update=False)
+                return user
 
-    def before_request(self):
-        """
-        Listener that is called at the start of each request. Responsible for
-        setting g.user and g.lastuserinfo
-        """
+    def get_logged_in_user(self, scope='*'):
+
         user = None
         token_error = None
         g.lastuserinfo = None
@@ -180,7 +191,7 @@ class UserManagerBase(object):
 
         # Look for a valid auth token that maps to a user
         try:
-            user = self.token_auth(header_only=True)
+            user = self.token_auth(resource=scope, header_only=True)
         except LastuserTokenAuthException as e:
             token_error = e
             user = None
@@ -196,9 +207,11 @@ class UserManagerBase(object):
                         # Are we in a subdomain with a parent domain cookie, with a completely
                         # new user? Try loading this user from Lastuser and obtaining an
                         # access_token if we're a trusted client.
-                        user = self.lastuser.login_from_cookie(g.lastuser_cookie['userid'])
+                        user = self.lastuser.login_from_cookie(
+                            g.lastuser_cookie['userid'])
                     if user:
-                        cache_key = ('lastuser/session/' + g.lastuser_cookie['sessionid']).encode('utf-8')
+                        cache_key = (
+                            'lastuser/session/' + g.lastuser_cookie['sessionid']).encode('utf-8')
                         sessiondata = self.lastuser.cache.get(cache_key)
                         fresh_data = False
                         if not sessiondata:
@@ -206,7 +219,8 @@ class UserManagerBase(object):
                                 g.lastuser_cookie['sessionid'], user)
                             fresh_data = True
                         if sessiondata.get('active'):
-                            self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
+                            self.lastuser.cache.set(
+                                cache_key, sessiondata, timeout=300)
                             if fresh_data:
                                 signal_user_session_refreshed.send(user)
                         else:
@@ -218,15 +232,24 @@ class UserManagerBase(object):
                 user = self.load_user(g.lastuser_cookie['userid'])
                 if not user:
                     # As above, try to create user record
-                    user = self.lastuser.login_from_cookie(g.lastuser_cookie['userid'])
+                    user = self.lastuser.login_from_cookie(
+                        g.lastuser_cookie['userid'])
+        return user, user_from_token, token_error
+
+    def before_request(self):
+        """
+        Listener that is called at the start of each request. Responsible for
+        """
+        user, user_from_token, token_error = self.get_logged_in_user()
 
         if not user:
             g.lastuser_cookie.pop('userid', None)
             g.lastuser_cookie.pop('sessionid', None)
 
         g.user = user
+        lastuser_cache = self.get_lastuser_cache(header_only=True)
         if user:
-            g.access_scope = ['*']  # TODO: In future, restrict to access token's scope
+            g.access_scope = lastuser_cache['scope']  # TODO: In future, restrict to access token's scope
             g.lastuserinfo = self.make_userinfo(user)
             if not user_from_token:
                 if g.lastuser_cookie.get('userid') != user.userid:
@@ -400,14 +423,15 @@ class Lastuser(object):
                     httponly=True)                                            # Don't allow reading this from JS.
         return response
 
-    def requires_login(self, f):
+    def requires_login(self, f, scope="*"):
         """
         Decorator for functions that require login.
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
             g.login_required = True
-            if hasattr(g, 'lastuserinfo') and g.lastuserinfo is None:
+            user, user_from_token, token_error = self.get_logged_in_user(scope=scope)
+            if not user or (hasattr(g, 'lastuserinfo') and g.lastuserinfo is None):
                 if not self._login_handler:
                     abort(403)
                 return redirect(url_for(self._login_handler.__name__,
@@ -435,7 +459,7 @@ class Lastuser(object):
         else:
             return permission in self.permissions()
 
-    def requires_permission(self, permission):
+    def requires_permission(self, permission, scope="*"):
         """
         Decorator that checks if the user has a certain permission from Lastuser. Uses
         :meth:`has_permission` to check if the permission is available.
@@ -444,12 +468,14 @@ class Lastuser(object):
             @wraps(f)
             def decorated_function(*args, **kwargs):
                 g.login_required = True
+                user, user_from_token, token_error = self.get_logged_in_user(
+                    scope=scope)
                 if g.lastuserinfo is None:
                     if not self._login_handler:
                         abort(403)
                     return redirect(url_for(self._login_handler.__name__,
                         next=get_current_url()))
-                if not self.has_permission(permission):
+                if not user or not self.has_permission(permission):
                     abort(403)
                 signal_before_wrapped_view.send(f)
                 return f(*args, **kwargs)
