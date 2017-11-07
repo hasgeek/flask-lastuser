@@ -129,46 +129,45 @@ class UserManagerBase(object):
                     u"A Bearer token is required in the Authorization header.")
             if 'access_token' in request.values:
                 raise LastuserTokenAuthException(
-                    u"Access token specified in both header and body.")
+                    u"Access token specified in both Authorization header and query or form.")
         elif not header_only:
             # Is there an access token in the form or query?
             token = request.values.get('access_token')
-        else:
-            return None
 
         return token
 
-    def get_lastuser_cache_key(self, token):
+    def get_tokenscope_cache_key(self, token):
         return u'lastuser/tokenscope/{token}'.format(token=token)
 
-    def get_lastuser_cache(self, header_only):
-        token = self.get_token(header_only)
-        cache_key = self.get_lastuser_cache_key(token)
-
-        result = self.lastuser.cache.get(cache_key) or self.lastuser._lastuser_api_call(
-            self.lastuser.tokengetscope_endpoint, access_token=token)
-        self.lastuser.cache.set(cache_key, result, timeout=300)
-        return result
-
-    def token_auth(self, resource='*', header_only=False):
+    def get_and_cache_token_scope(self, header_only):
         if not self.lastuser.cache:
             raise LastuserException(u"No caching backend found")
 
-        result = self.get_lastuser_cache(header_only)
+        token = self.get_token(header_only)
+        cache_key = self.get_tokenscope_cache_key(token)
 
-        if result['status'] == 'error' or 'userinfo' not in result:
+        tokenscope_cache = self.lastuser.cache.get(cache_key) or self.lastuser._lastuser_api_call(
+            self.lastuser.tokengetscope_endpoint, access_token=token)
+        self.lastuser.cache.set(cache_key, tokenscope_cache, timeout=300)
+        return tokenscope_cache
+
+    def token_auth(self, resource='*', header_only=False):
+        g.tokenscope = None
+        tokenscope_cache = self.get_and_cache_token_scope(header_only)
+
+        if tokenscope_cache['status'] == 'error' or 'userinfo' not in tokenscope_cache:
             raise LastuserTokenAuthException(u"Invalid token.")
-        elif result['status'] == 'ok':
+        elif tokenscope_cache['status'] == 'ok':
             # All okay.
-            if resource not in result['scope']:
+            if resource not in tokenscope_cache['scope']:
                 raise LastuserTokenAuthException(u"Invalid token.")
             else:
                 # If the user is unknown, make a new user. If the user is known, don't update scoped data
-                user = self.load_user_userinfo(result['userinfo'], access_token=None, update=False)
+                user = self.load_user_userinfo(tokenscope_cache['userinfo'], access_token=None, update=False)
+                g.tokenscope = tokenscope_cache
                 return user
 
     def get_logged_in_user(self, scope='*'):
-
         user = None
         token_error = None
         g.lastuserinfo = None
@@ -247,9 +246,8 @@ class UserManagerBase(object):
             g.lastuser_cookie.pop('sessionid', None)
 
         g.user = user
-        lastuser_cache = self.get_lastuser_cache(header_only=True)
         if user:
-            g.access_scope = lastuser_cache['scope']  # TODO: In future, restrict to access token's scope
+            g.access_scope = g.tokenscope['scope'] if (hasattr(g, 'tokenscope') and g.tokenscope is not None) else ["*"]
             g.lastuserinfo = self.make_userinfo(user)
             if not user_from_token:
                 if g.lastuser_cookie.get('userid') != user.userid:
@@ -423,22 +421,26 @@ class Lastuser(object):
                     httponly=True)                                            # Don't allow reading this from JS.
         return response
 
-    def requires_login(self, f, scope="*"):
+    def requires_login(self, scope="*"):
         """
         Decorator for functions that require login.
         """
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            g.login_required = True
-            user, user_from_token, token_error = self.get_logged_in_user(scope=scope)
-            if not user or (hasattr(g, 'lastuserinfo') and g.lastuserinfo is None):
-                if not self._login_handler:
-                    abort(403)
-                return redirect(url_for(self._login_handler.__name__,
-                    next=get_current_url()))
-            signal_before_wrapped_view.send(f)
-            return f(*args, **kwargs)
-        return decorated_function
+        def inner(f):
+            @wraps(f)
+            def decorated_function(*args, **kwargs):
+                g.login_required = True
+                if scope not in g.access_scope or (hasattr(g, 'lastuserinfo') and g.lastuserinfo is None):
+                    if not self._login_handler:
+                        abort(403)
+                    return redirect(url_for(self._login_handler.__name__,
+                        next=get_current_url()))
+                signal_before_wrapped_view.send(f)
+                return f(*args, **kwargs)
+            return decorated_function
+        if callable(scope):
+            return inner(scope)
+        else:
+            return inner
 
     def permissions(self):
         """
@@ -468,14 +470,12 @@ class Lastuser(object):
             @wraps(f)
             def decorated_function(*args, **kwargs):
                 g.login_required = True
-                user, user_from_token, token_error = self.get_logged_in_user(
-                    scope=scope)
                 if g.lastuserinfo is None:
                     if not self._login_handler:
                         abort(403)
                     return redirect(url_for(self._login_handler.__name__,
                         next=get_current_url()))
-                if not user or not self.has_permission(permission):
+                if scope not in g.access_scope or not self.has_permission(permission):
                     abort(403)
                 signal_before_wrapped_view.send(f)
                 return f(*args, **kwargs)
