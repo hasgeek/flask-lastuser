@@ -161,15 +161,10 @@ class UserManagerBase(object):
         if not isinstance(tokenscope_cache, dict) or tokenscope_cache['status'] == 'error' or 'userinfo' not in tokenscope_cache:
             raise LastuserTokenAuthException(u"Invalid token.")
         elif tokenscope_cache['status'] == 'ok':
-            # All okay.
-            if resource not in tokenscope_cache['clientinfo']['scope']:
-                raise LastuserTokenAuthException(u"Invalid token.")
-            else:
-                print tokenscope_cache['clientinfo']['scope']
-                # If the user is unknown, make a new user. If the user is known, don't update scoped data
-                user = self.load_user_userinfo(tokenscope_cache['userinfo'], access_token=None, update=False)
-                g.tokenscope = tokenscope_cache
-                return user
+            # If the user is unknown, make a new user. If the user is known, don't update scoped data
+            user = self.load_user_userinfo(tokenscope_cache['userinfo'], access_token=None, update=False)
+            g.tokenscope = tokenscope_cache
+            return user
 
     def get_logged_in_user(self, scope='*'):
         user = None
@@ -251,7 +246,7 @@ class UserManagerBase(object):
 
         g.user = user
         if user:
-            g.access_scope = g.tokenscope['scope'] if (hasattr(g, 'tokenscope') and g.tokenscope is not None) else ["*"]
+            g.access_scope = g.tokenscope['clientinfo']['scope'] if (hasattr(g, 'tokenscope') and g.tokenscope is not None) else ["*"]
             g.lastuserinfo = self.make_userinfo(user)
             if not user_from_token:
                 if g.lastuser_cookie.get('userid') != user.userid:
