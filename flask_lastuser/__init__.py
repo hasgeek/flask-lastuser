@@ -146,6 +146,9 @@ class UserManagerBase(object):
         token = self.get_token(header_only)
         cache_key = self.get_tokenscope_cache_key(token)
 
+        if token is None:
+            return
+
         tokenscope_cache = self.lastuser.cache.get(cache_key) or self.lastuser._lastuser_api_call(
             self.lastuser.tokengetscope_endpoint, access_token=token)
         self.lastuser.cache.set(cache_key, tokenscope_cache, timeout=300)
@@ -155,13 +158,14 @@ class UserManagerBase(object):
         g.tokenscope = None
         tokenscope_cache = self.get_and_cache_token_scope(header_only)
 
-        if tokenscope_cache['status'] == 'error' or 'userinfo' not in tokenscope_cache:
+        if not isinstance(tokenscope_cache, dict) or tokenscope_cache['status'] == 'error' or 'userinfo' not in tokenscope_cache:
             raise LastuserTokenAuthException(u"Invalid token.")
         elif tokenscope_cache['status'] == 'ok':
             # All okay.
-            if resource not in tokenscope_cache['scope']:
+            if resource not in tokenscope_cache['clientinfo']['scope']:
                 raise LastuserTokenAuthException(u"Invalid token.")
             else:
+                print tokenscope_cache['clientinfo']['scope']
                 # If the user is unknown, make a new user. If the user is known, don't update scoped data
                 user = self.load_user_userinfo(tokenscope_cache['userinfo'], access_token=None, update=False)
                 g.tokenscope = tokenscope_cache
@@ -429,7 +433,7 @@ class Lastuser(object):
             @wraps(f)
             def decorated_function(*args, **kwargs):
                 g.login_required = True
-                if scope not in g.access_scope or (hasattr(g, 'lastuserinfo') and g.lastuserinfo is None):
+                if (hasattr(g, 'access_scope') and scope not in g.access_scope) or (hasattr(g, 'lastuserinfo') and g.lastuserinfo is None):
                     if not self._login_handler:
                         abort(403)
                     return redirect(url_for(self._login_handler.__name__,
