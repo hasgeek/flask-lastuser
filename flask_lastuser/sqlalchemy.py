@@ -12,7 +12,7 @@ from collections import defaultdict
 import urlparse
 from pytz import timezone
 from werkzeug import cached_property
-from flask import g, current_app
+from flask import g, current_app, _request_ctx_stack
 from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, Table,
     PrimaryKeyConstraint, UniqueConstraint, MetaData)
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
@@ -914,6 +914,7 @@ class UserManager(UserManagerBase):
 
         g.user = user
         g.lastuserinfo = self.make_userinfo(user)
+        _request_ctx_stack.top.user = user
 
         self.update_teams(user)
         signal_user_looked_up.send(g.user)
