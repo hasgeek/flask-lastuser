@@ -379,6 +379,7 @@ class Lastuser(object):
         your app. Static resources should be served by downstream servers
         without involving Python code.
         """
+        # FIXME: Only add these headers if there's a user logged in
         if 'Expires' not in response.headers:
             response.headers['Expires'] = 'Fri, 01 Jan 1990 00:00:00 GMT'
         if 'Cache-Control' in response.headers:
