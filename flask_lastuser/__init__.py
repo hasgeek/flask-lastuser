@@ -24,7 +24,8 @@ except ImportError:
 from coaster.utils import getbool
 from coaster.views import get_current_url, get_next_url
 
-from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json, current_app
+from flask import (session, g, redirect, url_for, request, flash, abort, Response, jsonify, json, current_app,
+    _request_ctx_stack)
 from flask.signals import Namespace
 
 from . import translations
@@ -245,6 +246,7 @@ class UserManagerBase(object):
             g.lastuser_cookie.pop('sessionid', None)
 
         g.user = user
+        _request_ctx_stack.top.user = user
         if user:
             g.access_scope = g.tokenscope['clientinfo']['scope'] if (hasattr(g, 'tokenscope') and g.tokenscope is not None) else ["*"]
             g.lastuserinfo = self.make_userinfo(user)
@@ -399,6 +401,7 @@ class Lastuser(object):
         your app. Static resources should be served by downstream servers
         without involving Python code.
         """
+        # FIXME: Only add these headers if there's a user logged in
         if 'Expires' not in response.headers:
             response.headers['Expires'] = 'Fri, 01 Jan 1990 00:00:00 GMT'
         if 'Cache-Control' in response.headers:
