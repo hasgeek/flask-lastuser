@@ -120,17 +120,14 @@ class UserManagerBase(object):
         token = None
 
         if 'Authorization' in request.headers:
-            token_match = auth_bearer_re.search(
-                request.headers['Authorization'])
+            token_match = auth_bearer_re.search(request.headers['Authorization'])
             if token_match:
                 token = token_match.group(1)
             else:
                 # Unrecognized Authorization header
-                raise LastuserTokenAuthException(
-                    u"A Bearer token is required in the Authorization header.")
+                raise LastuserTokenAuthException(u"A Bearer token is required in the Authorization header.")
             if 'access_token' in request.values:
-                raise LastuserTokenAuthException(
-                    u"Access token specified in both Authorization header and query or form.")
+                raise LastuserTokenAuthException(u"Access token specified in both Authorization header and query or form.")
         elif not header_only:
             # Is there an access token in the form or query?
             token = request.values.get('access_token')
@@ -206,20 +203,16 @@ class UserManagerBase(object):
                         # Are we in a subdomain with a parent domain cookie, with a completely
                         # new user? Try loading this user from Lastuser and obtaining an
                         # access_token if we're a trusted client.
-                        user = self.lastuser.login_from_cookie(
-                            g.lastuser_cookie['userid'])
+                        user = self.lastuser.login_from_cookie(g.lastuser_cookie['userid'])
                     if user:
-                        cache_key = (
-                            'lastuser/session/' + g.lastuser_cookie['sessionid']).encode('utf-8')
+                        cache_key = ('lastuser/session/' + g.lastuser_cookie['sessionid']).encode('utf-8')
                         sessiondata = self.lastuser.cache.get(cache_key)
                         fresh_data = False
                         if not sessiondata:
-                            sessiondata = self.lastuser.session_verify(
-                                g.lastuser_cookie['sessionid'], user)
+                            sessiondata = self.lastuser.session_verify(g.lastuser_cookie['sessionid'], user)
                             fresh_data = True
                         if sessiondata.get('active'):
-                            self.lastuser.cache.set(
-                                cache_key, sessiondata, timeout=300)
+                            self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
                             if fresh_data:
                                 signal_user_session_refreshed.send(user)
                         else:
@@ -231,8 +224,7 @@ class UserManagerBase(object):
                 user = self.load_user(g.lastuser_cookie['userid'])
                 if not user:
                     # As above, try to create user record
-                    user = self.lastuser.login_from_cookie(
-                        g.lastuser_cookie['userid'])
+                    user = self.lastuser.login_from_cookie(g.lastuser_cookie['userid'])
         return user, user_from_token, token_error
 
     def before_request(self):
