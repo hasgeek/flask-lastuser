@@ -22,10 +22,10 @@ try:
 except ImportError:
     from ordereddict import OrderedDict
 from coaster.utils import getbool
+from coaster.auth import add_auth_attribute
 from coaster.views import get_current_url, get_next_url
 
-from flask import (session, g, redirect, url_for, request, flash, abort, Response, jsonify, json, current_app,
-    _request_ctx_stack)
+from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json, current_app
 from flask.signals import Namespace
 
 from . import translations
@@ -226,7 +226,7 @@ class UserManagerBase(object):
             g.lastuser_cookie.pop('sessionid', None)
 
         g.user = user
-        _request_ctx_stack.top.user = user
+        add_auth_attribute('user', user)
         if user:
             g.access_scope = ['*']  # TODO: In future, restrict to access token's scope
             g.lastuserinfo = self.make_userinfo(user)
