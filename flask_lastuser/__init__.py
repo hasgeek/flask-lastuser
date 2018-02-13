@@ -10,7 +10,7 @@ from __future__ import absolute_import
 from functools import wraps
 import uuid
 from datetime import datetime, timedelta
-import urlparse
+from six.moves.urllib.parse import urlsplit, urljoin
 import requests
 import urllib
 import re
@@ -504,7 +504,7 @@ class Lastuser(object):
                 # Check if the user's browser supports cookies
                 session['cookies'] = True
                 # Reconstruct current URL with ?cookietest=1 or &cookietest=1 appended
-                url_parts = urlparse.urlsplit(request.url)
+                url_parts = urlsplit(request.url)
                 if url_parts.query:
                     return redirect(request.url + '&cookietest=1&next=' + urllib.quote(next))
                 else:
@@ -536,7 +536,7 @@ class Lastuser(object):
         # Discard currently logged in user
         g.lastuser_cookie.pop('sessionid', None)
         g.lastuser_cookie.pop('userid', None)
-        login_redirect_url = '%s?%s' % (urlparse.urljoin(self.lastuser_server, self.auth_endpoint),
+        login_redirect_url = '%s?%s' % (urljoin(self.lastuser_server, self.auth_endpoint),
             urllib.urlencode([
                 ('client_id', self.client_id),
                 ('response_type', 'code'),
@@ -568,11 +568,11 @@ class Lastuser(object):
             g.lastuser_cookie.pop('sessionid', None)
             g.lastuser_cookie.pop('userid', None)
             if not (next.startswith('http:') or next.startswith('https:')):
-                next = urlparse.urljoin(request.url_root, next)
+                next = urljoin(request.url_root, next)
             return Response(u'''<!DOCTYPE html>
                 <html><head><meta http-equiv="refresh" content="0; {url}" /></head>
                 <body><a href="{url}">Logging you out…</a></body></html>'''.format(
-                url=urlparse.urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
+                url=urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
                 % (urllib.quote(self.client_id), urllib.quote(next))),
                 200, {
                     'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
@@ -611,7 +611,7 @@ class Lastuser(object):
             # Validations done
 
             # Step 2: Get the auth token
-            r = requests.post(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
+            r = requests.post(urljoin(self.lastuser_server, self.token_endpoint),
                 auth=(self.client_id, self.client_secret),
                 headers={'Accept': 'application/json'},
                 data={'code': code,
@@ -662,7 +662,7 @@ class Lastuser(object):
 
         This method closely resembles :meth:`auth_handler`.
         """
-        r = requests.post(urlparse.urljoin(self.lastuser_server, self.token_endpoint),
+        r = requests.post(urljoin(self.lastuser_server, self.token_endpoint),
             auth=(self.client_id, self.client_secret),
             headers={'Accept': 'application/json'},
             data={'userid': userid,
@@ -730,7 +730,7 @@ class Lastuser(object):
         """
         Returns the full URL to a given endpoint path on the current Lastuser server.
         """
-        return urlparse.urljoin(self.lastuser_server, endpoint)
+        return urljoin(self.lastuser_server, endpoint)
 
     def _lastuser_api_call(self, endpoint, method='POST', **kwargs):
         r = {'GET': requests.get,

@@ -15,6 +15,7 @@ class TestMergeUserData(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+        self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         db.init_app(self.app)
         self.ctx = self.app.test_request_context()
         self.ctx.push()

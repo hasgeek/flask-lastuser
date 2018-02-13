@@ -9,7 +9,7 @@ SQLAlchemy extensions for Flask-Lastuser.
 from __future__ import absolute_import
 
 from collections import defaultdict
-import urlparse
+from six.moves.urllib.parse import urljoin
 from pytz import timezone
 from werkzeug import cached_property
 from flask import g, current_app, _request_ctx_stack
@@ -215,7 +215,7 @@ class UserBase(BaseMixin):
     @property
     def profile_url(self):
         """URL to the user's profile. Can be overidden by subclasses"""
-        return urlparse.urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
+        return urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
 
     @property
     def profile_name(self):

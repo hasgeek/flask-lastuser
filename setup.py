@@ -3,8 +3,8 @@ import re
 from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
-README = unicode(open(os.path.join(here, 'README.rst')).read(), 'utf-8')
-CHANGES = unicode(open(os.path.join(here, 'CHANGES.rst')).read(), 'utf-8')
+README = open(os.path.join(here, 'README.rst')).read()
+CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 versionfile = open(os.path.join(here, "flask_lastuser", "_version.py")).read()
 
 mo = re.search(r"^__version__\s*=\s*['\"]([^'\"]*)['\"]", versionfile, re.M)
@@ -14,11 +14,12 @@ else:
     raise RuntimeError("Unable to find version string in flask_lastuser/_version.py.")
 
 requires = [
-    'coaster>=0.6.0',
-    'SQLAlchemy>=0.8',
+    'coaster',
+    'SQLAlchemy>=1.0',
     'Flask-BabelEx',
     'Flask',
     'requests',
+    'six',
     ]
 
 setup(
@@ -36,6 +37,9 @@ setup(
     platforms='any',
     install_requires=requires,
     classifiers=[
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3.6",
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
         'Intended Audience :: Developers',
@@ -44,5 +48,8 @@ setup(
         'Programming Language :: Python',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
         'Topic :: Software Development :: Libraries :: Python Modules'
-        ]
-)
+        ],
+    dependency_links=[
+        "https://github.com/hasgeek/coaster/archive/master.zip#egg=coaster-dev",
+        ],
+    )
