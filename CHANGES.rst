@@ -9,6 +9,7 @@
 * Switch to g.lastuser_cookie for cross-domain login cookie.
 * Support for team ownership of resources via helper methods (team, allowner, etc).
 * Switch from ~username to @username.
+* Support Coaster's auth framework.
 
 0.3.14
 ------

@@ -9,15 +9,16 @@ SQLAlchemy extensions for Flask-Lastuser.
 from __future__ import absolute_import
 
 from collections import defaultdict
-import urlparse
+from six.moves.urllib.parse import urljoin
 from pytz import timezone
 from werkzeug import cached_property
-from flask import g, current_app, _request_ctx_stack
+from flask import g, current_app
 from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, Table,
     PrimaryKeyConstraint, UniqueConstraint, MetaData)
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
-from flask_lastuser import UserInfo, UserManagerBase, signal_user_looked_up, __
+from . import UserInfo, UserManagerBase, signal_user_looked_up, __
+from coaster.auth import add_auth_attribute, current_auth
 from coaster.utils import getbool, make_name, require_one_of, LabeledEnum
 from coaster.sqlalchemy import make_timestamp_columns, failsafe_add, BaseMixin, JsonDict, BaseNameMixin
 
@@ -215,7 +216,7 @@ class UserBase(BaseMixin):
     @property
     def profile_url(self):
         """URL to the user's profile. Can be overidden by subclasses"""
-        return urlparse.urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
+        return urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
 
     @property
     def profile_name(self):
@@ -912,12 +913,12 @@ class UserManager(UserManagerBase):
         user.lastuser_token_type = token['token_type']
         user.lastuser_token_scope = token['scope']
 
-        g.user = user
-        g.lastuserinfo = self.make_userinfo(user)
-        _request_ctx_stack.top.user = user
+        add_auth_attribute('user', user)
+        g.user = user  # XXX: Deprecated, for backward compatibility only
+        add_auth_attribute('lastuserinfo', self.make_userinfo(user))
 
         self.update_teams(user)
-        signal_user_looked_up.send(g.user)
+        signal_user_looked_up.send(current_auth.user)
         return user
 
     def update_teams(self, user):

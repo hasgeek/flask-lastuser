@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-import httpretty
+from mocket import mocketize
+from mocket.mockhttp import Entry
 from flask import Flask, json
 from flask_lastuser import Lastuser
 from flask_lastuser.sqlalchemy import UserManager
@@ -14,6 +15,7 @@ class TestMergeUserData(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+        self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         db.init_app(self.app)
         self.ctx = self.app.test_request_context()
         self.ctx.push()
@@ -184,31 +186,7 @@ class TestUserMerge(TestMergeUserData):
         self.team2 = Team.query.filter_by(userid=u"0897867564534231243546").one()
         self.team3 = Team.query.filter_by(userid=u"1324354657687980132435").one()
 
-        def request_callback(request, uri, headers):
-            if 'userid' in request.parsed_body and request.parsed_body['userid'][0] == '0987654321098765432109':
-                response = {
-                    "status": "ok",
-                    "type": "user",
-                    "buid": "1234567890123456789012",
-                    "userid": "1234567890123456789012",
-                    "name": "user1",
-                    "title": "User 1",
-                    "label": "User 1 (@user1)",
-                    "oldids": ['0987654321098765432109'],
-                    "timezone": "Asia/Kolkata",
-                    }
-            else:
-                response = {'status': 'error', 'error': 'not_found'}
-            return (200, headers, json.dumps(response))
-
-        httpretty.enable()
-        httpretty.register_uri(httpretty.POST, self.lastuser.endpoint_url(self.lastuser.getuser_userid_endpoint),
-            body=request_callback,
-            content_type="application/json")
-
     def tearDown(self):
-        httpretty.disable()
-        httpretty.reset()
         super(TestUserMerge, self).tearDown()
 
     def test_merge_removes_username(self):
@@ -243,7 +221,26 @@ class TestUserMerge(TestMergeUserData):
         self.assertEqual(user2, None)  # Username doesn't exist anymore
         self.assertEqual(user3, self.user3)
 
+    @mocketize
     def test_user_get_userid(self):
+        # Handler for `user2 = User.get(...)`
+        Entry.single_register(
+            Entry.POST,
+            self.lastuser.endpoint_url(self.lastuser.getuser_userid_endpoint),
+            body=json.dumps({
+                "status": "ok",
+                "type": "user",
+                "buid": "1234567890123456789012",
+                "userid": "1234567890123456789012",
+                "name": "user1",
+                "title": "User 1",
+                "label": "User 1 (@user1)",
+                "oldids": ['0987654321098765432109'],
+                "timezone": "Asia/Kolkata",
+                }),
+            headers={'content-type': 'application/json'}
+            )
+
         user1 = User.get(userid=u"1234567890123456789012")
         user2 = User.get(userid=u"0987654321098765432109")
         user3 = User.get(userid=u"1234567890987654321234")
