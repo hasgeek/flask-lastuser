@@ -16,7 +16,7 @@ import urllib
 import re
 import weakref
 import itsdangerous
-from flask_babel import Domain
+from flask_babelex import Domain
 try:
     from collections import OrderedDict
 except ImportError:

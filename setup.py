@@ -16,7 +16,7 @@ else:
 requires = [
     'coaster',
     'SQLAlchemy>=1.0',
-    'Flask-Babel',
+    'Flask-BabelEx',
     'Flask',
     'requests',
     'six',
