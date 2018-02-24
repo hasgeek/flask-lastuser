@@ -21,8 +21,8 @@ try:
     from collections import OrderedDict
 except ImportError:
     from ordereddict import OrderedDict
-from coaster.utils import getbool
-from coaster.auth import add_auth_attribute
+from coaster.utils import getbool, is_collection
+from coaster.auth import add_auth_attribute, current_auth, request_has_auth
 from coaster.views import get_current_url, get_next_url
 
 from flask import session, g, redirect, url_for, request, flash, abort, Response, jsonify, json, current_app
@@ -157,27 +157,28 @@ class UserManagerBase(object):
     def before_request(self):
         """
         Listener that is called at the start of each request. Responsible for
-        setting g.user and g.lastuserinfo
+        setting current_auth.user and current_auth.lastuserinfo
         """
         user = None
         token_error = None
-        g.lastuserinfo = None
+        add_auth_attribute('lastuserinfo', None)
         user_from_token = False
 
-        g.lastuser_cookie = {}
+        add_auth_attribute('cookie', {})
 
         # Migrate data from Flask cookie session
         if 'lastuser_sessionid' in session:
-            g.lastuser_cookie['sessionid'] = session.pop('lastuser_sessionid')
+            current_auth.cookie['sessionid'] = session.pop('lastuser_sessionid')
         if 'lastuser_userid' in session:
-            g.lastuser_cookie['userid'] = session.pop('lastuser_userid')
+            current_auth.cookie['userid'] = session.pop('lastuser_userid')
 
         if 'lastuser' in request.cookies:
             try:
-                g.lastuser_cookie, lastuser_cookie_headers = self.lastuser.serializer.loads(
+                lastuser_cookie, lastuser_cookie_headers = self.lastuser.serializer.loads(
                     request.cookies['lastuser'], return_header=True)
             except itsdangerous.BadSignature:
-                g.lastuser_cookie = {}
+                lastuser_cookie = {}
+            add_auth_attribute('cookie', lastuser_cookie)
 
         # Look for a valid auth token that maps to a user
         try:
@@ -190,21 +191,21 @@ class UserManagerBase(object):
         else:
             if self.lastuser.cache and self.lastuser.use_sessions:
                 # If this app has a cache and sessions aren't explicitly disabled, use sessions
-                if 'sessionid' in g.lastuser_cookie and 'userid' in g.lastuser_cookie:
+                if 'sessionid' in current_auth.cookie and 'userid' in current_auth.cookie:
                     # We have a sessionid and userid. Load user and verify the session
-                    user = self.load_user(g.lastuser_cookie['userid'])
+                    user = self.load_user(current_auth.cookie['userid'])
                     if not user:
                         # Are we in a subdomain with a parent domain cookie, with a completely
                         # new user? Try loading this user from Lastuser and obtaining an
                         # access_token if we're a trusted client.
-                        user = self.lastuser.login_from_cookie(g.lastuser_cookie['userid'])
+                        user = self.lastuser.login_from_cookie(current_auth.cookie['userid'])
                     if user:
-                        cache_key = ('lastuser/session/' + g.lastuser_cookie['sessionid']).encode('utf-8')
+                        cache_key = ('lastuser/session/' + current_auth.cookie['sessionid']).encode('utf-8')
                         sessiondata = self.lastuser.cache.get(cache_key)
                         fresh_data = False
                         if not sessiondata:
                             sessiondata = self.lastuser.session_verify(
-                                g.lastuser_cookie['sessionid'], user)
+                                current_auth.cookie['sessionid'], user)
                             fresh_data = True
                         if sessiondata.get('active'):
                             self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
@@ -215,29 +216,29 @@ class UserManagerBase(object):
                             user = None
                             if fresh_data:
                                 signal_user_session_expired.send(user)
-            elif 'userid' in g.lastuser_cookie:
-                user = self.load_user(g.lastuser_cookie['userid'])
+            elif 'userid' in current_auth.cookie:
+                user = self.load_user(current_auth.cookie['userid'])
                 if not user:
                     # As above, try to create user record
-                    user = self.lastuser.login_from_cookie(g.lastuser_cookie['userid'])
+                    user = self.lastuser.login_from_cookie(current_auth.cookie['userid'])
 
         if not user:
-            g.lastuser_cookie.pop('userid', None)
-            g.lastuser_cookie.pop('sessionid', None)
+            current_auth.cookie.pop('userid', None)
+            current_auth.cookie.pop('sessionid', None)
 
-        g.user = user
         add_auth_attribute('user', user)
+        g.user = user  # XXX: Deprecated, for backward compatibility only
         if user:
-            g.access_scope = ['*']  # TODO: In future, restrict to access token's scope
-            g.lastuserinfo = self.make_userinfo(user)
+            add_auth_attribute('access_scope', ['*'])  # TODO: In future, restrict to access token's scope
+            add_auth_attribute('lastuserinfo', self.make_userinfo(user))
             if not user_from_token:
-                if g.lastuser_cookie.get('userid') != user.userid:
+                if current_auth.cookie.get('userid') != user.userid:
                     # Merged account loaded. Switch over
-                    g.lastuser_cookie['userid'] = user.userid
+                    current_auth.cookie['userid'] = user.userid
 
         # This will be set to True by the various login_required handlers downstream
-        g.login_required = False
-        signal_user_looked_up.send(g.user)
+        add_auth_attribute('login_required', False)
+        signal_user_looked_up.send(current_auth.user)
 
         if token_error is not None:
             return resource_auth_error(unicode(token_error))
@@ -287,7 +288,6 @@ class Lastuser(object):
     Flask extension for Lastuser
     """
     def __init__(self, app=None, cache=None):
-        self.app = app
         self.cache = cache
 
         self._login_handler = None
@@ -312,11 +312,11 @@ class Lastuser(object):
         self.cache = cache
 
     def init_app(self, app):
-        self.app = app
-
         if not hasattr(app, 'extensions'):
             app.extensions = {}
-        app.extensions['lastuser'] = weakref.proxy(self)
+        app.extensions['lastuser'] = self
+        app.login_manager = self
+        # TODO: Implement `self._load_user` that does the same as `before_request`
 
         if 'cache' in app.extensions and isinstance(app.extensions['cache'], dict):
             for c in app.extensions['cache'].keys():
@@ -359,15 +359,15 @@ class Lastuser(object):
         self.external_resource('teams', self.endpoint_url('api/1/teams'), 'GET')
         self.external_resource('session/verify', self.endpoint_url('api/1/session/verify'), 'POST')
 
-        self.app.before_request(self.before_request)
-        self.app.after_request(self.after_request)
+        app.before_request(self.before_request)
+        app.after_request(self.after_request)
 
     def init_usermanager(self, um):
         self.usermanager = um
         um.lastuser = weakref.proxy(self)
 
     def before_request(self):
-        g.lastuser = self
+        add_auth_attribute('lastuser', self)
         if self.usermanager:
             self.usermanager.before_request()
 
@@ -392,11 +392,12 @@ class Lastuser(object):
 
         # Set login cookie, but only if there's a user or an existing login cookie
         # This prevents sending a cookie during an API call with no incoming cookie
-        if hasattr(g, 'lastuser_cookie'):  # There won't be a g.lastuser_cookie if this is a 400 Bad Request
-            if 'lastuser' in request.cookies or g.lastuser_cookie:
+        # There won't be a current_auth.cookie if this is a 400 Bad Request
+        if request_has_auth() and hasattr(current_auth, 'cookie'):
+            if 'lastuser' in request.cookies or current_auth.cookie:
                 expires = datetime.utcnow() + timedelta(days=365)
                 response.set_cookie('lastuser',
-                    value=self.serializer.dumps(g.lastuser_cookie, header_fields={'v': 1}),
+                    value=self.serializer.dumps(current_auth.cookie, header_fields={'v': 1}),
                     max_age=31557600,                                         # Keep this cookie for a year.
                     expires=expires,                                          # Expire one year from now.
                     domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),  # Place cookie in master domain.
@@ -409,8 +410,8 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            g.login_required = True
-            if hasattr(g, 'lastuserinfo') and g.lastuserinfo is None:
+            add_auth_attribute('login_required', True)
+            if hasattr(current_auth, 'lastuserinfo') and current_auth.lastuserinfo is None:
                 if not self._login_handler:
                     abort(403)
                 return redirect(url_for(self._login_handler.__name__,
@@ -423,7 +424,7 @@ class Lastuser(object):
         """
         Return all permissions available to user.
         """
-        return g.lastuserinfo is not None and g.lastuserinfo.permissions or []
+        return current_auth.lastuserinfo is not None and current_auth.lastuserinfo.permissions or []
 
     def has_permission(self, permission):
         """
@@ -431,9 +432,9 @@ class Lastuser(object):
 
         :param permission: Permission to check for. If multiple permissions are passed,
             any of them may match.
-        :type permission: string, list/tuple
+        :type permission: str, list, tuple, set
         """
-        if isinstance(permission, (list, tuple)):
+        if is_collection(permission):
             return bool(set(permission) & set(self.permissions()))
         else:
             return permission in self.permissions()
@@ -446,8 +447,8 @@ class Lastuser(object):
         def inner(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
-                g.login_required = True
-                if g.lastuserinfo is None:
+                add_auth_attribute('login_required', True)
+                if current_auth.lastuserinfo is None:
                     if not self._login_handler:
                         abort(403)
                     return redirect(url_for(self._login_handler.__name__,
@@ -467,16 +468,16 @@ class Lastuser(object):
         def inner(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
-                g.login_required = True
+                add_auth_attribute('login_required', True)
                 # If the user's not logged in, log them in
-                if g.lastuserinfo is None:
+                if current_auth.lastuserinfo is None:
                     if not self._login_handler:
                         abort(403)
                     return redirect(url_for(self._login_handler.__name__,
                         next=get_current_url()))
                 # If the user is logged in, check if they have the required scope.
                 # If not, send them off to Lastuser for the additional scope.
-                existing = g.lastuserinfo.token_scope.split(' ')
+                existing = current_auth.lastuserinfo.token_scope.split(' ')
                 for item in scope:
                     if item not in existing:
                         required = set(self._login_handler().get('scope', 'id').split(' '))
@@ -493,7 +494,7 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            g.login_required = True
+            add_auth_attribute('login_required', True)
             data = f(*args, **kwargs)
             metarefresh = getbool(request.args.get('metarefresh'))
             if 'cookietest' in request.args:
@@ -534,8 +535,8 @@ class Lastuser(object):
         session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
                 next=next, _external=True)
         # Discard currently logged in user
-        g.lastuser_cookie.pop('sessionid', None)
-        g.lastuser_cookie.pop('userid', None)
+        current_auth.cookie.pop('sessionid', None)
+        current_auth.cookie.pop('userid', None)
         login_redirect_url = '%s?%s' % (urljoin(self.lastuser_server, self.auth_endpoint),
             urllib.urlencode([
                 ('client_id', self.client_id),
@@ -562,11 +563,11 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            g.login_required = True
+            add_auth_attribute('login_required', True)
             next = f(*args, **kwargs)
-            g.lastuserinfo = None
-            g.lastuser_cookie.pop('sessionid', None)
-            g.lastuser_cookie.pop('userid', None)
+            add_auth_attribute('lastuserinfo', None)
+            current_auth.cookie.pop('sessionid', None)
+            current_auth.cookie.pop('userid', None)
             if not (next.startswith('http:') or next.startswith('https:')):
                 next = urljoin(request.url_root, next)
             return Response(u'''<!DOCTYPE html>
@@ -588,7 +589,7 @@ class Lastuser(object):
         """
         @wraps(f)
         def decorated_function(*args, **kw):
-            g.login_required = True
+            add_auth_attribute('login_required', True)
             # Step 1: Validations
             # Validation 1: Check if there is an error handler
             if not self._auth_error_handler:
@@ -645,8 +646,8 @@ class Lastuser(object):
             if 'sessionid' in userinfo and self.use_sessions:
                 # Remove sessionid from userinfo as it's session-specific data
                 # while the rest of userinfo is longterm
-                g.lastuser_cookie['sessionid'] = userinfo.pop('sessionid')
-            g.lastuser_cookie['userid'] = userinfo['userid']
+                current_auth.cookie['sessionid'] = userinfo.pop('sessionid')
+            current_auth.cookie['userid'] = userinfo['userid']
             # Step 4.4: Connect to a user manager if there is one
             if self.usermanager:
                 self.usermanager.login_listener(userinfo, token)
@@ -684,8 +685,8 @@ class Lastuser(object):
             }
         userinfo = result['userinfo']
         if 'sessionid' in userinfo and self.use_sessions:
-            g.lastuser_cookie['sessionid'] = userinfo.pop('sessionid')
-        g.lastuser_cookie['userid'] = userinfo['userid']
+            current_auth.cookie['sessionid'] = userinfo.pop('sessionid')
+        current_auth.cookie['userid'] = userinfo['userid']
         if self.usermanager:
             return self.usermanager.login_listener(userinfo, token)
 
@@ -816,10 +817,10 @@ class Lastuser(object):
         resource_details = self.external_resources[name]
 
         if _token is None:
-            if not hasattr(g, 'lastuserinfo') or not g.lastuserinfo:
+            if not hasattr(current_auth, 'lastuserinfo') or not current_auth.lastuserinfo:
                 raise LastuserResourceException("No access token available")
-            _token = g.lastuserinfo.token
-            _token_type = g.lastuserinfo.token_type
+            _token = current_auth.lastuserinfo.token
+            _token_type = current_auth.lastuserinfo.token_type
 
         if _token_type is None:
             raise LastuserResourceException("Token type not provided")
