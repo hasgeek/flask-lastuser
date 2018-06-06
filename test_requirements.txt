@@ -1,5 +1,5 @@
 nose==1.3.7
-coverage
+coverage==4.5.1
 coveralls
 Flask-SQLAlchemy
 mocket
