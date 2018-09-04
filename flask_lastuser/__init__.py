@@ -308,7 +308,7 @@ class Lastuser(object):
         if app is not None:
             self.init_app(app)
 
-    def init_cache(self, cache):
+    def init_cache(self, cache, app=None):
         self.cache = cache
 
     def init_app(self, app):
