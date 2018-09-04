@@ -140,12 +140,16 @@ class UserManagerBase(object):
         else:
             cache_key = u'lastuser/tokenverify/{token}/{resource}'.format(token=token, resource=resource)
         result = None
-        if self.lastuser.cache:
-            result = self.lastuser.cache.get(cache_key)
+
+        config = current_app.lastuser_config
+
+        if config['cache']:
+            result = config['cache'].get(cache_key)
         if result is None:
-            result = self.lastuser._lastuser_api_call(self.lastuser.tokenverify_endpoint, resource=resource, access_token=token)
-        if self.lastuser.cache:
-            self.lastuser.cache.set(cache_key, result, timeout=300)
+            result = self.lastuser._lastuser_api_call(config['tokenverify_endpoint'],
+                resource=resource, access_token=token)
+        if config['cache']:
+            config['cache'].set(cache_key, result, timeout=300)
         if result['status'] == 'error' or 'userinfo' not in result:
             raise LastuserTokenAuthException(u"Invalid token.")
         elif result['status'] == 'ok':
@@ -166,6 +170,8 @@ class UserManagerBase(object):
 
         add_auth_attribute('cookie', {})
 
+        config = current_app.lastuser_config
+
         # Migrate data from Flask cookie session
         if 'lastuser_sessionid' in session:
             current_auth.cookie['sessionid'] = session.pop('lastuser_sessionid')
@@ -174,7 +180,7 @@ class UserManagerBase(object):
 
         if 'lastuser' in request.cookies:
             try:
-                lastuser_cookie, lastuser_cookie_headers = self.lastuser.serializer.loads(
+                lastuser_cookie, lastuser_cookie_headers = config['serializer'].loads(
                     request.cookies['lastuser'], return_header=True)
             except itsdangerous.BadSignature:
                 lastuser_cookie = {}
@@ -189,7 +195,7 @@ class UserManagerBase(object):
         if user:
             user_from_token = True
         else:
-            if self.lastuser.cache and self.lastuser.use_sessions:
+            if config['cache'] and config['use_sessions']:
                 # If this app has a cache and sessions aren't explicitly disabled, use sessions
                 if 'sessionid' in current_auth.cookie and 'userid' in current_auth.cookie:
                     # We have a sessionid and userid. Load user and verify the session
@@ -201,18 +207,18 @@ class UserManagerBase(object):
                         user = self.lastuser.login_from_cookie(current_auth.cookie['userid'])
                     if user:
                         cache_key = ('lastuser/session/' + current_auth.cookie['sessionid']).encode('utf-8')
-                        sessiondata = self.lastuser.cache.get(cache_key)
+                        sessiondata = config['cache'].get(cache_key)
                         fresh_data = False
                         if not sessiondata:
                             sessiondata = self.lastuser.session_verify(
                                 current_auth.cookie['sessionid'], user)
                             fresh_data = True
                         if sessiondata.get('active'):
-                            self.lastuser.cache.set(cache_key, sessiondata, timeout=300)
+                            config['cache'].set(cache_key, sessiondata, timeout=300)
                             if fresh_data:
                                 signal_user_session_refreshed.send(user)
                         else:
-                            self.lastuser.cache.delete(cache_key)
+                            config['cache'].delete(cache_key)
                             user = None
                             if fresh_data:
                                 signal_user_session_expired.send(user)
@@ -295,69 +301,91 @@ class Lastuser(object):
         self._auth_error_handler = None
         self.usermanager = None
 
-        self.lastuser_server = None
-        self.auth_endpoint = None
-        self.token_endpoint = None
-        self.client_id = None
-        self.client_secret = None
-        self.use_sessions = True
-
         self.resources = OrderedDict()
-        self.external_resources = {}
 
         if app is not None:
             self.init_app(app)
 
-    def init_cache(self, cache, app=None):
-        self.cache = cache
+    def _init_app_lastuser_config(self, app):
+        # Used by init_app and init_cache to create empty config
+        if not hasattr(app, 'lastuser_config'):
+            app.lastuser_config = {}
+        app.lastuser_config.setdefault('external_resources', {})
+        app.lastuser_config.setdefault('cache', None)
+
+        app.lastuser_config.setdefault('lastuser_server', None)
+        app.lastuser_config.setdefault('auth_endpoint', None)
+        app.lastuser_config.setdefault('token_endpoint', None)
+        app.lastuser_config.setdefault('client_id', None)
+        app.lastuser_config.setdefault('client_secret', None)
+        app.lastuser_config.setdefault('use_sessions', True)
+
+    def init_cache(self, app, cache):
+        self._init_app_lastuser_config(app)
+        app.lastuser_config['cache'] = cache
 
     def init_app(self, app):
         if not hasattr(app, 'extensions'):
             app.extensions = {}
         app.extensions['lastuser'] = self
         app.login_manager = self
+        self._init_app_lastuser_config(app)
+
         # TODO: Implement `self._load_user` that does the same as `before_request`
 
         if 'cache' in app.extensions and isinstance(app.extensions['cache'], dict):
             for c in app.extensions['cache'].keys():
                 if c.with_jinja2_ext:
                     # Main application cache. Use it.
-                    self.init_cache(c)
+                    self.init_cache(app, c)
                     break
 
-        self.lastuser_server = app.config['LASTUSER_SERVER']
-        self.auth_endpoint = app.config.get('LASTUSER_ENDPOINT_AUTH', 'auth')
-        self.token_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKEN', 'token')
-        self.logout_endpoint = app.config.get('LASTUSER_ENDPOINT_LOGOUT', 'logout')
-        self.login_beacon_iframe_endpoint = app.config.get('LASTUSER_LOGIN_BEACON_IFRAME', 'api/1/login/beacon.html')
+        app.lastuser_config['lastuser_server'] = app.config['LASTUSER_SERVER']
+        app.lastuser_config['auth_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_AUTH', 'auth')
+        app.lastuser_config['token_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_TOKEN', 'token')
+        app.lastuser_config['logout_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_LOGOUT', 'logout')
+        app.lastuser_config['login_beacon_iframe_endpoint'] = app.config.get(
+            'LASTUSER_LOGIN_BEACON_IFRAME', 'api/1/login/beacon.html')
 
-        self.syncresources_endpoint = app.config.get('LASTUSER_ENDPOINT_REGISTER_RESOURCE', 'api/1/resource/sync')
-        self.tokenverify_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
-        self.tokengetscope_endpoint = app.config.get('LASTUSER_ENDPOINT_TOKENGETSCOPE', 'api/1/token/get_scope')
-        self.getuser_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
-        self.getusers_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER', 'api/1/user/getusers')
-        self.getuser_userid_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
-        self.getuser_userids_endpoint = app.config.get('LASTUSER_ENDPOINT_GETUSER_USERIDS', 'api/1/user/get_by_userids')
-        self.getuser_autocomplete_endpoint = app.config.get('LASTUSER_ENDPOINT_USER_AUTOCOMPLETE', 'api/1/user/autocomplete')
-        self.client_id = app.config['LASTUSER_CLIENT_ID']
-        self.client_secret = app.config['LASTUSER_CLIENT_SECRET']
-        self.use_sessions = app.config.get('LASTUSER_USE_SESSIONS', True)
+        app.lastuser_config['syncresources_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_REGISTER_RESOURCE', 'api/1/resource/sync')
+        app.lastuser_config['tokenverify_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify')
+        app.lastuser_config['tokengetscope_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_TOKENGETSCOPE', 'api/1/token/get_scope')
+        app.lastuser_config['getuser_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_GETUSER', 'api/1/user/get')
+        app.lastuser_config['getusers_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_GETUSER', 'api/1/user/getusers')
+        app.lastuser_config['getuser_userid_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_GETUSER_USERID', 'api/1/user/get_by_userid')
+        app.lastuser_config['getuser_userids_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_GETUSER_USERIDS', 'api/1/user/get_by_userids')
+        app.lastuser_config['getuser_autocomplete_endpoint'] = app.config.get(
+            'LASTUSER_ENDPOINT_USER_AUTOCOMPLETE', 'api/1/user/autocomplete')
+        app.lastuser_config['client_id'] = app.config['LASTUSER_CLIENT_ID']
+        app.lastuser_config['client_secret'] = app.config['LASTUSER_CLIENT_SECRET']
+        app.lastuser_config['use_sessions'] = app.config.get('LASTUSER_USE_SESSIONS', True)
 
         # Setup cookie serializer
-        self.serializer = itsdangerous.JSONWebSignatureSerializer(
+        app.lastuser_config['serializer'] = itsdangerous.JSONWebSignatureSerializer(
             app.config.get('LASTUSER_SECRET_KEY') or app.config['SECRET_KEY'])
 
         # Register known external resources provided by Lastuser itself
-        self.external_resource('id', self.endpoint_url('api/1/id'), 'GET')
-        self.external_resource('email', self.endpoint_url('api/1/email'), 'GET')
-        self.external_resource('email/add', self.endpoint_url('api/1/email/add'), 'POST')
-        self.external_resource('email/remove', self.endpoint_url('api/1/email/remove'), 'POST')
-        self.external_resource('phone', self.endpoint_url('api/1/phone'), 'GET')
-        self.external_resource('phone/add', self.endpoint_url('api/1/phone/add'), 'POST')
-        self.external_resource('phone/remove', self.endpoint_url('api/1/phone/remove'), 'POST')
-        self.external_resource('organizations', self.endpoint_url('api/1/organizations'), 'GET')
-        self.external_resource('teams', self.endpoint_url('api/1/teams'), 'GET')
-        self.external_resource('session/verify', self.endpoint_url('api/1/session/verify'), 'POST')
+        with app.app_context():  # Required by `self.endpoint_url`
+            self.external_resource(app, 'id', self.endpoint_url('api/1/id'), 'GET')
+            self.external_resource(app, 'email', self.endpoint_url('api/1/email'), 'GET')
+            self.external_resource(app, 'email/add', self.endpoint_url('api/1/email/add'), 'POST')
+            self.external_resource(app, 'email/remove', self.endpoint_url('api/1/email/remove'), 'POST')
+            self.external_resource(app, 'phone', self.endpoint_url('api/1/phone'), 'GET')
+            self.external_resource(app, 'phone/add', self.endpoint_url('api/1/phone/add'), 'POST')
+            self.external_resource(app, 'phone/remove', self.endpoint_url('api/1/phone/remove'), 'POST')
+            self.external_resource(app, 'organizations', self.endpoint_url('api/1/organizations'), 'GET')
+            self.external_resource(app, 'teams', self.endpoint_url('api/1/teams'), 'GET')
+            self.external_resource(app, 'session/verify', self.endpoint_url('api/1/session/verify'), 'POST')
 
         app.before_request(self.before_request)
         app.after_request(self.after_request)
@@ -397,7 +425,7 @@ class Lastuser(object):
             if 'lastuser' in request.cookies or current_auth.cookie:
                 expires = datetime.utcnow() + timedelta(days=365)
                 response.set_cookie('lastuser',
-                    value=self.serializer.dumps(current_auth.cookie, header_fields={'v': 1}),
+                    value=current_app.lastuser_config['serializer'].dumps(current_auth.cookie, header_fields={'v': 1}),
                     max_age=31557600,                                         # Keep this cookie for a year.
                     expires=expires,                                          # Expire one year from now.
                     domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),  # Place cookie in master domain.
@@ -531,15 +559,16 @@ class Lastuser(object):
     def _login_handler_internal(self, scope, next, message=None, metarefresh=False):
         if not self._redirect_uri_name:
             raise LastuserConfigException("No authorization handler defined")
+        config = current_app.lastuser_config
         session['lastuser_state'] = randomstring()
         session['lastuser_redirect_uri'] = url_for(self._redirect_uri_name,
                 next=next, _external=True)
         # Discard currently logged in user
         current_auth.cookie.pop('sessionid', None)
         current_auth.cookie.pop('userid', None)
-        login_redirect_url = '%s?%s' % (urljoin(self.lastuser_server, self.auth_endpoint),
+        login_redirect_url = '%s?%s' % (urljoin(config['lastuser_server'], config['auth_endpoint']),
             urllib.urlencode([
-                ('client_id', self.client_id),
+                ('client_id', config['client_id']),
                 ('response_type', 'code'),
                 ('scope', scope),
                 ('state', session['lastuser_state']),
@@ -570,11 +599,12 @@ class Lastuser(object):
             current_auth.cookie.pop('userid', None)
             if not (next.startswith('http:') or next.startswith('https:')):
                 next = urljoin(request.url_root, next)
+            config = current_app.lastuser_config
             return Response(u'''<!DOCTYPE html>
                 <html><head><meta http-equiv="refresh" content="0; {url}" /></head>
                 <body><a href="{url}">Logging you out…</a></body></html>'''.format(
-                url=urljoin(self.lastuser_server, self.logout_endpoint) + '?client_id=%s&next=%s'
-                % (urllib.quote(self.client_id), urllib.quote(next))),
+                url=urljoin(config['lastuser_server'], config['logout_endpoint']) + '?client_id=%s&next=%s'
+                % (urllib.quote(config['client_id']), urllib.quote(next))),
                 200, {
                     'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
                     'Cache-Control': 'private, no-cache'
@@ -611,9 +641,11 @@ class Lastuser(object):
                 return self._auth_error_handler(error='code_missing')
             # Validations done
 
+            config = current_app.lastuser_config
+
             # Step 2: Get the auth token
-            r = requests.post(urljoin(self.lastuser_server, self.token_endpoint),
-                auth=(self.client_id, self.client_secret),
+            r = requests.post(urljoin(config['lastuser_server'], config['token_endpoint']),
+                auth=(config['client_id'], config['client_secret']),
                 headers={'Accept': 'application/json'},
                 data={'code': code,
                       'redirect_uri': session.get('lastuser_redirect_uri'),
@@ -643,7 +675,7 @@ class Lastuser(object):
                 }
             # Step 4.3: Save user info received
             userinfo = result.get('userinfo', {})
-            if 'sessionid' in userinfo and self.use_sessions:
+            if 'sessionid' in userinfo and config['use_sessions']:
                 # Remove sessionid from userinfo as it's session-specific data
                 # while the rest of userinfo is longterm
                 current_auth.cookie['sessionid'] = userinfo.pop('sessionid')
@@ -663,8 +695,9 @@ class Lastuser(object):
 
         This method closely resembles :meth:`auth_handler`.
         """
-        r = requests.post(urljoin(self.lastuser_server, self.token_endpoint),
-            auth=(self.client_id, self.client_secret),
+        config = current_app.lastuser_config
+        r = requests.post(urljoin(config['lastuser_server'], config['token_endpoint']),
+            auth=(config['client_id'], config['client_secret']),
             headers={'Accept': 'application/json'},
             data={'userid': userid,
                   'grant_type': 'client_credentials',
@@ -684,7 +717,7 @@ class Lastuser(object):
             'scope': result.get('scope'),
             }
         userinfo = result['userinfo']
-        if 'sessionid' in userinfo and self.use_sessions:
+        if 'sessionid' in userinfo and config['use_sessions']:
             current_auth.cookie['sessionid'] = userinfo.pop('sessionid')
         current_auth.cookie['userid'] = userinfo['userid']
         if self.usermanager:
@@ -731,13 +764,14 @@ class Lastuser(object):
         """
         Returns the full URL to a given endpoint path on the current Lastuser server.
         """
-        return urljoin(self.lastuser_server, endpoint)
+        return urljoin(current_app.lastuser_config['lastuser_server'], endpoint)
 
     def _lastuser_api_call(self, endpoint, method='POST', **kwargs):
+        config = current_app.lastuser_config
         r = {'GET': requests.get,
             'POST': requests.post}[method](
                 self.endpoint_url(endpoint),
-                auth=(self.client_id, self.client_secret),
+                auth=(config['client_id'], config['client_secret']),
                 data=kwargs, headers={'Accept': 'application/json'})
         if r.status_code in (400, 500, 401):
             raise LastuserApiException("Call to %s returned %d" % (endpoint, r.status_code))
@@ -748,7 +782,8 @@ class Lastuser(object):
                 endpoint, r.status_code, r.text))
 
     def sync_resources(self):
-        return self._lastuser_api_call(self.syncresources_endpoint, resources=json.dumps(self.resources))
+        return self._lastuser_api_call(current_app.lastuser_config['syncresources_endpoint'],
+            resources=json.dumps(self.resources))
 
     def resource_handler(self, name, description=u"", siteresource=False):
         """
@@ -771,7 +806,7 @@ class Lastuser(object):
 
     # TODO: Map to app user if present. Check with UserManager
     def getuser(self, name):
-        result = self._lastuser_api_call(self.getuser_endpoint, name=name)
+        result = self._lastuser_api_call(current_app.lastuser_config['getuser_endpoint'], name=name)
         if (not result) or ('error' in result):
             return None
         else:
@@ -779,7 +814,7 @@ class Lastuser(object):
 
     # TODO: Map to app users if present. Check with UserManager
     def getusers(self, names):
-        result = self._lastuser_api_call(self.getusers_endpoint, name=names)
+        result = self._lastuser_api_call(current_app.lastuser_config['getusers_endpoint'], name=names)
         if (not result) or ('error' in result):
             return None
         else:
@@ -787,7 +822,7 @@ class Lastuser(object):
 
     # TODO: Map to app user if present. Check with UserManager
     def getuser_by_userid(self, userid):
-        result = self._lastuser_api_call(self.getuser_userid_endpoint, userid=userid)
+        result = self._lastuser_api_call(current_app.lastuser_config['getuser_userid_endpoint'], userid=userid)
         if (not result) or ('error' in result):
             return None
         else:
@@ -795,26 +830,26 @@ class Lastuser(object):
 
     # TODO: Map to app user if present. Check with UserManager
     def getuser_by_userids(self, userids):
-        result = self._lastuser_api_call(self.getuser_userids_endpoint, userid=userids)
+        result = self._lastuser_api_call(current_app.lastuser_config['getuser_userids_endpoint'], userid=userids)
         if (not result) or ('error' in result):
             return None
         else:
             return result['results']
 
-    def external_resource(self, name, endpoint, method):
+    def external_resource(self, app, name, endpoint, method):
         """
         Register an external resource.
         """
         if method not in ['GET', 'PUT', 'POST', 'DELETE']:
             raise LastuserException("Unknown HTTP method '%s'" % method)
-        self.external_resources[name] = {'endpoint': endpoint, 'method': method}
+        app.lastuser_config['external_resources'][name] = {'endpoint': endpoint, 'method': method}
 
     def call_resource(self, name, headers=None, data=None, files=None,
                       _raw=False, _token=None, _token_type=None, **kw):
         """
         Call an external resource.
         """
-        resource_details = self.external_resources[name]
+        resource_details = current_app.lastuser_config['external_resources'][name]
 
         if _token is None:
             if not hasattr(current_auth, 'lastuserinfo') or not current_auth.lastuserinfo:

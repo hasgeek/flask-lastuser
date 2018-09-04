@@ -3,7 +3,7 @@
 import unittest
 from mocket import mocketize
 from mocket.mockhttp import Entry
-from flask import Flask, json
+from flask import Flask, json, current_app
 from flask_lastuser import Lastuser
 from flask_lastuser.sqlalchemy import UserManager
 from models import db, User, Team, Profile
@@ -226,7 +226,7 @@ class TestUserMerge(TestMergeUserData):
         # Handler for `user2 = User.get(...)`
         Entry.single_register(
             Entry.POST,
-            self.lastuser.endpoint_url(self.lastuser.getuser_userid_endpoint),
+            self.lastuser.endpoint_url(current_app.lastuser_config['getuser_userid_endpoint']),
             body=json.dumps({
                 "status": "ok",
                 "type": "user",
