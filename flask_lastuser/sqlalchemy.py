@@ -835,8 +835,8 @@ class UserManager(UserManagerBase):
         elif hasattr(self.usermodel, 'get'):
             user = self.usermodel.get(userid=userid, defercols=False)
         else:
-            user = self.usermodel.query.filter_by(userid=userid
-                ).options(undefer('userinfo')).one_or_none()
+            user = self.usermodel.query.filter_by(
+                userid=userid).options(undefer('userinfo')).one_or_none()
         if user is None:
             if create:
                 user = self.usermodel(userid=userid)
