@@ -9,6 +9,7 @@ SQLAlchemy extensions for Flask-Lastuser.
 from __future__ import absolute_import
 
 from collections import defaultdict
+import six
 from six.moves.urllib.parse import urljoin
 from pytz import timezone
 from werkzeug import cached_property
@@ -17,10 +18,12 @@ from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, T
     PrimaryKeyConstraint, UniqueConstraint, MetaData)
 from sqlalchemy.orm import deferred, undefer, relationship, synonym
 from sqlalchemy.ext.declarative import declared_attr
-from . import UserInfo, UserManagerBase, signal_user_looked_up, __
+
 from coaster.auth import add_auth_attribute, current_auth
 from coaster.utils import getbool, make_name, require_one_of, LabeledEnum
 from coaster.sqlalchemy import make_timestamp_columns, failsafe_add, BaseMixin, JsonDict, BaseNameMixin
+
+from . import UserInfo, UserManagerBase, signal_user_looked_up, __
 
 
 __all__ = ['UserBase', 'UserBase2', 'TeamMixin', 'TeamMembersMixin', 'TeamBase', 'TeamBase2',
@@ -187,12 +190,12 @@ class UserBase(BaseMixin):
         return [self.userid] + self.organizations_memberof_ids()
 
     def owner_of(self, userid):
-        if not isinstance(userid, basestring):
+        if not isinstance(userid, six.string_types):
             userid = userid.userid
         return userid in self.user_organizations_owned_ids()
 
     def member_of(self, userid):
-        if not isinstance(userid, basestring):
+        if not isinstance(userid, six.string_types):
             userid = userid.userid
         return userid in self.user_organizations_memberof_ids()
 
@@ -206,7 +209,7 @@ class UserBase(BaseMixin):
         return [self.userid] + [team['userid'] for team in self.userinfo.get('teams', [])]
 
     def teammember_of(self, userid):
-        if not isinstance(userid, basestring):
+        if not isinstance(userid, six.string_types):
             userid = userid.userid
         return userid in self.team_ids()
 
