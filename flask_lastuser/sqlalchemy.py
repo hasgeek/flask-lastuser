@@ -602,8 +602,8 @@ class ProfileMixin(object):
             perms = set()
         perms.add('view')
         if user and (
-                self.userid in user.user_organizations_owned_ids() or
-                self.userid in user.oldids):
+                self.userid in user.user_organizations_owned_ids()
+                or self.userid in user.oldids):
             perms.add('edit')
             perms.add('delete')
             perms.add('new')
@@ -817,7 +817,7 @@ def make_user_team_table(base):
         return Table('users_teams', base.metadata, *(make_timestamp_columns() + (
             Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
             Column('team_id', Integer, ForeignKey('team.id'), primary_key=True)
-            )))
+        )))
 
 
 class UserManager(UserManagerBase):
