@@ -935,7 +935,7 @@ class UserManager(UserManagerBase):
                 org_teams.setdefault(t['org'], []).append(t)
 
             for orgid, teams in org_teams.items():
-                if ('teams' in user.access_scope or 'teams/*' in user.access_scope) and orgid in user.organizations_owned_ids():
+                if {'*', 'teams', 'teams/*'}.intersection(user.access_scope) and orgid in user.organizations_owned_ids():
                     # 1/4: Remove teams that are no longer in lastuser, provided we have
                     # an authoritative list ('teams' is in scope and the user owns the organization)
                     removed_teams = self.teammodel.query.filter_by(orgid=orgid).filter(
