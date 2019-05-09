@@ -3,9 +3,12 @@ import re
 from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
-README = open(os.path.join(here, 'README.rst')).read()
-CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
-versionfile = open(os.path.join(here, "flask_lastuser", "_version.py")).read()
+with open(os.path.join(here, 'README.rst')) as f:
+    README = f.read()
+with open(os.path.join(here, 'CHANGES.rst')) as f:
+    CHANGES = f.read()
+with open(os.path.join(here, "flask_lastuser", "_version.py")) as f:
+    versionfile = f.read()
 
 mo = re.search(r"^__version__\s*=\s*['\"]([^'\"]*)['\"]", versionfile, re.M)
 if mo:
@@ -20,7 +23,7 @@ requires = [
     'Flask',
     'requests',
     'six',
-    ]
+]
 
 setup(
     name='Flask-Lastuser',
@@ -48,8 +51,8 @@ setup(
         'Programming Language :: Python',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
         'Topic :: Software Development :: Libraries :: Python Modules'
-        ],
+    ],
     dependency_links=[
         "https://github.com/hasgeek/coaster/archive/master.zip#egg=coaster-dev",
-        ],
-    )
+    ],
+)
