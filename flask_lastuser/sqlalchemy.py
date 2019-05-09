@@ -810,11 +810,11 @@ class ProfileBase(ProfileMixin2, BaseNameMixin):
         return '<%s %s "%s">' % (self.__class__.__name__, self.name, self.title)
 
 
-def make_user_team_table(base):
+def make_user_team_table(base, timezone=False):
     if 'users_teams' in base.metadata.tables:
         return base.metadata.tables['users_teams']
     else:
-        return Table('users_teams', base.metadata, *(make_timestamp_columns(timezone=True) + (
+        return Table('users_teams', base.metadata, *(make_timestamp_columns(timezone=timezone) + (
             Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
             Column('team_id', Integer, ForeignKey('team.id'), primary_key=True)
             )))
@@ -829,7 +829,8 @@ class UserManager(UserManagerBase):
         self.usermodel = usermodel
         self.teammodel = teammodel
         if teammodel is not None:
-            self.users_teams = make_user_team_table(db.Model)
+            self.users_teams = make_user_team_table(db.Model,
+                timezone=getattr(usermodel, '__with_timezone__', False))
 
     def load_user(self, userid, uuid=None, create=False):
         # TODO: How do we cache this? Connect to a cache manager
