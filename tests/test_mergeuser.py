@@ -47,17 +47,17 @@ class TestMergeUserData(unittest.TestCase):
                             u'userid': u'qazwsxedcrfvtgbyhnujmi',
                             u'name': u'org1',
                             u'title': u'Organization 1',
-                        },
-                    ],
+                            },
+                        ],
                     u'owner': [
                         {
                             u'userid': u'qazwsxedcrfvtgbyhnujmi',
                             u'name': u'org1',
                             u'title': u'Organization 1',
-                        },
-                    ]
-                }
-            })
+                            },
+                        ]
+                    }
+                })
         user2 = User(userid=u"0987654321098765432109", username=u"user2", fullname=u"User 2",
             email=u'user2@example.com',
             userinfo={
@@ -68,27 +68,27 @@ class TestMergeUserData(unittest.TestCase):
                             u'userid': u'qwertyuiopasdfghjklzxc',
                             u'name': u'org2',
                             u'title': u'Organization 2',
-                        },
+                            },
                         {
                             u'userid': u'mnbvcxzlkjhgfdsapoiuyt',
                             u'name': u'org3',
                             u'title': u'Organization 3',
-                        },
-                    ],
+                            },
+                        ],
                     u'owner': [
                         {
                             u'userid': u'qwertyuiopasdfghjklzxc',
                             u'name': u'org2',
                             u'title': u'Organization 2',
-                        },
+                            },
                         {
                             'userid': 'mnbvcxzlkjhgfdsapoiuyt',
                             'name': 'org3',
                             'title': 'Organization 3',
-                        },
-                    ]
-                }
-            })
+                            },
+                        ]
+                    }
+                })
         user3 = User(userid=u"1234567890987654321234", username=u"user3", fullname=u"User 3",
             email=u'user3@example.com',
             userinfo={
@@ -99,27 +99,27 @@ class TestMergeUserData(unittest.TestCase):
                             u'userid': u'mnbvcxzlkjhgfdsapoiuyt',
                             u'name': u'org3',
                             u'title': u'Organization 3',
-                        },
+                            },
                         {
                             u'userid': u'qazwsxedcrfvtgbyhnujmi',
                             u'name': u'org1',
                             u'title': u'Organization 1',
-                        },
-                    ],
+                            },
+                        ],
                     u'owner': [
                         {
                             u'userid': u'mnbvcxzlkjhgfdsapoiuyt',
                             u'name': u'org3',
                             u'title': u'Organization 3',
-                        },
+                            },
                         {
                             u'userid': u'qazwsxedcrfvtgbyhnujmi',
                             u'name': u'org1',
                             u'title': u'Organization 1',
-                        },
-                    ]
-                }
-            })
+                            },
+                        ]
+                    }
+                })
 
         team1 = Team(userid=u"1324354657687980089786", orgid=u"qazwsxedcrfvtgbyhnujmi",
             title=u"Team 1", users=[user1, user2])
@@ -237,9 +237,9 @@ class TestUserMerge(TestMergeUserData):
                 "label": "User 1 (@user1)",
                 "oldids": ['0987654321098765432109'],
                 "timezone": "Asia/Kolkata",
-            }),
+                }),
             headers={'content-type': 'application/json'}
-        )
+            )
 
         user1 = User.get(userid=u"1234567890123456789012")
         user2 = User.get(userid=u"0987654321098765432109")

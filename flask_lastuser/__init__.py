@@ -573,7 +573,7 @@ class Lastuser(object):
                 ('scope', scope),
                 ('state', session['lastuser_state']),
                 ('redirect_uri', session['lastuser_redirect_uri']),
-            ] + ([('message', message)] if message else [])))
+                ] + ([('message', message)] if message else [])))
         if not metarefresh:
             return redirect(login_redirect_url)
         else:
@@ -584,7 +584,7 @@ class Lastuser(object):
                 200, {
                     'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
                     'Cache-Control': 'private, no-cache'
-                })
+                    })
 
     def logout_handler(self, f):
         """
@@ -608,7 +608,7 @@ class Lastuser(object):
                 200, {
                     'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
                     'Cache-Control': 'private, no-cache'
-            })
+                    })
 
         return decorated_function
 
@@ -673,7 +673,7 @@ class Lastuser(object):
                 'access_token': result.get('access_token'),
                 'token_type': result.get('token_type'),
                 'scope': result.get('scope'),
-            }
+                }
             # Step 4.3: Save user info received
             userinfo = result.get('userinfo', {})
             if 'sessionid' in userinfo and config['use_sessions']:
@@ -716,7 +716,7 @@ class Lastuser(object):
             'access_token': result.get('access_token'),
             'token_type': result.get('token_type'),
             'scope': result.get('scope'),
-        }
+            }
         userinfo = result['userinfo']
         if 'sessionid' in userinfo and config['use_sessions']:
             current_auth.cookie['sessionid'] = userinfo.pop('sessionid')
@@ -800,7 +800,7 @@ class Lastuser(object):
                 'name': name,
                 'description': description,
                 'siteresource': siteresource
-            }
+                }
             return decorated_function
         return inner
 

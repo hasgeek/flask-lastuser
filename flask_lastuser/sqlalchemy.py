@@ -817,7 +817,7 @@ def make_user_team_table(base):
         return Table('users_teams', base.metadata, *(make_timestamp_columns(timezone=True) + (
             Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
             Column('team_id', Integer, ForeignKey('team.id'), primary_key=True)
-        )))
+            )))
 
 
 class UserManager(UserManagerBase):
