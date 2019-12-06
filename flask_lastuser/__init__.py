@@ -209,7 +209,7 @@ class UserManagerBase(object):
                         # access_token if we're a trusted client.
                         user = self.lastuser.login_from_cookie(current_auth.cookie['userid'])
                     if user:
-                        cache_key = ('lastuser/session/' + current_auth.cookie['sessionid']).encode('utf-8')
+                        cache_key = ('lastuser/session/' + current_auth.cookie['sessionid'])
                         sessiondata = config['cache'].get(cache_key)
                         fresh_data = False
                         if not sessiondata:
