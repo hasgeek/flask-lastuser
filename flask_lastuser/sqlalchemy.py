@@ -6,7 +6,7 @@ flask_lastuser.sqlalchemy
 SQLAlchemy extensions for Flask-Lastuser.
 """
 
-
+from __future__ import absolute_import
 
 from collections import defaultdict
 import six
@@ -247,7 +247,7 @@ class UserBase(BaseMixin):
         """
         Return userids and titles of user and all teams the user is a member of, grouped by organization.
         """
-        orgs = {org['userid']: org for byorgtype in list(self.userinfo.get('organizations', {}).values())
+        orgs = {org['userid']: org for byorgtype in self.userinfo.get('organizations', {}).values()
             for org in byorgtype}
         teamsbyorg = defaultdict(list)
         for team in self.userinfo.get('teams', []):
@@ -255,14 +255,14 @@ class UserBase(BaseMixin):
         return [(self.userid, self.pickername)] + [
             ('{title} (@{name})'.format(title=orgs.get(orgid, {}).get('title', ''), name=orgs.get(orgid, {}).get('name', '')),
                 [(team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])) for team in sorted(teams, key=lambda t: t['title'])])
-            for orgid, teams in sorted(list(teamsbyorg.items()), key=lambda row: orgs.get(row[0], {}).get('title'))]
+            for orgid, teams in sorted(teamsbyorg.items(), key=lambda row: orgs.get(row[0], {}).get('title'))]
 
     def allowner_choices(self):
         """
         Return userids and titles of the user, all organizations owned by the user, and all teams the user
         is a member of
         """
-        orgs = {org['userid']: org for byorgtype in list(self.userinfo.get('organizations', {}).values())
+        orgs = {org['userid']: org for byorgtype in self.userinfo.get('organizations', {}).values()
             for org in byorgtype}
         teamsbyorg = defaultdict(list)
         for team in self.userinfo.get('teams', []):
@@ -270,7 +270,7 @@ class UserBase(BaseMixin):
         for orgid in orgs:
             if orgid not in teamsbyorg:
                 teamsbyorg[orgid] = []
-        orgids = sorted(list(teamsbyorg.keys()), key=lambda orgid: orgs.get(orgid, {}).get('title'))
+        orgids = sorted(teamsbyorg.keys(), key=lambda orgid: orgs.get(orgid, {}).get('title'))
         ownedids = set(self.organizations_owned_ids())
 
         result = [(self.userid, self.pickername)]
@@ -380,7 +380,7 @@ def _do_merge_into(instance, other, helper_method=None):
                 migrated_tables.add(model.__table__.name)
 
     # Now look in the metadata for any tables we missed
-    for table in list(base.metadata.tables.values()):
+    for table in base.metadata.tables.values():
         if table.name not in migrated_tables:
             if not do_migrate_table(table):
                 safe_to_remove_instance = False
@@ -628,7 +628,7 @@ class ProfileMixin(object):
         idsnames = {user.userid: {'name': user.profile_name, 'title': user.fullname}}
         for org in user.organizations_memberof():
             idsnames[org['userid']] = {'name': org['name'], 'title': org['title']}
-        namesids = dict([(value['name'], key) for key, value in list(idsnames.items())])
+        namesids = {value['name']: key for key, value in idsnames.items()}
 
         # First, check if Profile userids and names match
         for profile in cls.query.filter(cls.name.in_(list(namesids.keys()))).all():
@@ -642,7 +642,7 @@ class ProfileMixin(object):
 
         # Second, check the other way around and keep this list of profiles
         profiles = dict([(p.userid, p) for p in cls.query.filter(cls.userid.in_(list(idsnames.keys()))).all()])
-        for profile in list(profiles.values()):
+        for profile in profiles.values():
             if profile.name != idsnames[profile.userid]['name']:
                 profile.name = idsnames[profile.userid]['name']
             if profile.title != idsnames[profile.userid]['title']:
@@ -935,7 +935,7 @@ class UserManager(UserManagerBase):
             for t in allteamdata:
                 org_teams.setdefault(t['org'], []).append(t)
 
-            for orgid, teams in list(org_teams.items()):
+            for orgid, teams in org_teams.items():
                 if {'*', 'teams', 'teams/*'}.intersection(user.access_scope) and orgid in user.organizations_owned_ids():
                     # 1/4: Remove teams that are no longer in lastuser, provided we have
                     # an authoritative list ('teams' is in scope and the user owns the organization)

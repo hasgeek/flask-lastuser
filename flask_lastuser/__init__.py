@@ -6,13 +6,14 @@ flask_lastuser
 Lastuser extension for Flask
 """
 
+from __future__ import absolute_import
 
 from functools import wraps
+import six
 import uuid
 from datetime import timedelta
-from six.moves.urllib.parse import urlsplit, urljoin
+from six.moves.urllib.parse import quote, urlencode, urlsplit, urljoin
 import requests
-import urllib.request, urllib.parse, urllib.error
 import re
 import weakref
 import itsdangerous
@@ -74,7 +75,7 @@ class LastuserTokenAuthException(LastuserException):
 
 def randomstring():
     """Returns a random UUID for use as a state token for CSRF protection"""
-    return str(uuid.uuid4())
+    return six.text_type(uuid.uuid4())
 
 
 def resource_auth_error(message):
@@ -209,7 +210,10 @@ class UserManagerBase(object):
                         # access_token if we're a trusted client.
                         user = self.lastuser.login_from_cookie(current_auth.cookie['userid'])
                     if user:
-                        cache_key = ('lastuser/session/' + current_auth.cookie['sessionid'])
+                        if six.PY3:
+                            cache_key = ('lastuser/session/' + current_auth.cookie['sessionid'])
+                        else:
+                            cache_key = ('lastuser/session/' + current_auth.cookie['sessionid']).encode('utf-8')
                         sessiondata = config['cache'].get(cache_key)
                         fresh_data = False
                         if not sessiondata:
@@ -252,7 +256,7 @@ class UserManagerBase(object):
         signal_user_looked_up.send(current_auth.user)
 
         if token_error is not None:
-            return resource_auth_error(str(token_error))
+            return resource_auth_error(six.text_type(token_error))
 
     def login_listener(self, userinfo, token):
         """
@@ -339,7 +343,7 @@ class Lastuser(object):
         # TODO: Implement `self._load_user` that does the same as `before_request`
 
         if 'cache' in app.extensions and isinstance(app.extensions['cache'], dict):
-            for c in list(app.extensions['cache'].keys()):
+            for c in app.extensions['cache'].keys():
                 if c.with_jinja2_ext:
                     # Main application cache. Use it.
                     self.init_cache(app, c)
@@ -541,9 +545,9 @@ class Lastuser(object):
                 # Reconstruct current URL with ?cookietest=1 or &cookietest=1 appended
                 url_parts = urlsplit(request.url)
                 if url_parts.query:
-                    return redirect(request.url + '&cookietest=1&next=' + urllib.parse.quote(next))
+                    return redirect(request.url + '&cookietest=1&next=' + quote(next))
                 else:
-                    return redirect(request.url + '?cookietest=1&next=' + urllib.parse.quote(next))
+                    return redirect(request.url + '?cookietest=1&next=' + quote(next))
             else:
                 if session.new:
                     # No support for cookies. Abort login
@@ -556,7 +560,7 @@ class Lastuser(object):
 
             scope = data.get('scope', 'id')
             message = data.get('message') or request.args.get('message')
-            if isinstance(message, str):
+            if isinstance(message, six.text_type):
                 message = message.encode('utf-8')
             return self._login_handler_internal(scope, next, message, metarefresh)
         self._login_handler = f
@@ -574,7 +578,7 @@ class Lastuser(object):
         current_auth.cookie.pop('userid', None)
         current_auth.cookie['updated_at'] = utcnow().isoformat()
         login_redirect_url = '%s?%s' % (urljoin(config['lastuser_server'], config['auth_endpoint']),
-            urllib.parse.urlencode([
+            urlencode([
                 ('client_id', config['client_id']),
                 ('response_type', 'code'),
                 ('scope', scope),
@@ -612,7 +616,7 @@ class Lastuser(object):
                 <html><head><meta http-equiv="refresh" content="0; {url}" /></head>
                 <body><a href="{url}">Logging you out…</a></body></html>'''.format(
                 url=urljoin(config['lastuser_server'], config['logout_endpoint']) + '?client_id=%s&next=%s'
-                % (urllib.parse.quote(config['client_id']), urllib.parse.quote(next))),
+                % (quote(config['client_id']), quote(next))),
                 200, {
                     'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
                     'Cache-Control': 'private, no-cache'
