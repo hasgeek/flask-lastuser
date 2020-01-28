@@ -12,6 +12,8 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+from __future__ import unicode_literals
+
 import sys, os
 
 sys.path.append(os.path.abspath('../'))
@@ -44,7 +46,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'flask-lastuser'
-copyright = '2012-17, HasGeek'
+copyright = '2012-20, HasGeek'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

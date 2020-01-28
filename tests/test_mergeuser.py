@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
+
 import unittest
-from mocket import mocketize
-from mocket.mockhttp import Entry
-from flask import Flask, json, current_app
+
+from flask import Flask, current_app, json
+
 from flask_lastuser import Lastuser
 from flask_lastuser.sqlalchemy import UserManager
-from models import db, User, Team, Profile
+from mocket import mocketize
+from mocket.mockhttp import Entry
+from models import Profile, Team, User, db
 
 # -- Tests --------------------------------------------------------------------
 

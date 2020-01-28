@@ -6,7 +6,7 @@ flask_lastuser
 Lastuser extension for Flask
 """
 
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 
 from functools import wraps
 import six

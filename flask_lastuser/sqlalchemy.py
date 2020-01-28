@@ -6,7 +6,7 @@ flask_lastuser.sqlalchemy
 SQLAlchemy extensions for Flask-Lastuser.
 """
 
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 
 from collections import defaultdict
 import six
@@ -641,7 +641,7 @@ class ProfileMixin(object):
         session.flush()
 
         # Second, check the other way around and keep this list of profiles
-        profiles = dict([(p.userid, p) for p in cls.query.filter(cls.userid.in_(list(idsnames.keys()))).all()])
+        profiles = {p.userid: p for p in cls.query.filter(cls.userid.in_(list(idsnames.keys()))).all()}
         for profile in profiles.values():
             if profile.name != idsnames[profile.userid]['name']:
                 profile.name = idsnames[profile.userid]['name']
