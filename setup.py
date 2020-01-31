@@ -53,7 +53,7 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules'
         ],
     dependency_links=[
-        "git+ssh://git@github.com/hasgeek/coaster#egg=coaster-dev",
-        "git+ssh://git@github.com/hasgeek/flask-babel2#egg=flask_babel2"
+        "git+https://github.com/hasgeek/coaster#egg=coaster-dev",
+        "git+https://github.com/hasgeek/flask-babel2#egg=flask_babel2"
         ],
     )
