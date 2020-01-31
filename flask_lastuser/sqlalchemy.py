@@ -6,7 +6,7 @@ flask_lastuser.sqlalchemy
 SQLAlchemy extensions for Flask-Lastuser.
 """
 
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 
 from collections import defaultdict
 import six
@@ -62,7 +62,7 @@ class UserBase(BaseMixin):
 
     @declared_attr
     def fullname(cls):
-        return Column(Unicode(80), default=u'', nullable=False)
+        return Column(Unicode(80), default='', nullable=False)
 
     @declared_attr
     def email(cls):
@@ -88,7 +88,7 @@ class UserBase(BaseMixin):
     @property
     def access_scope(self):
         # The "or u''" below is required since the field is nullable
-        return (self.lastuser_token_scope or u'').split(' ')
+        return (self.lastuser_token_scope or '').split(' ')
 
     # Userinfo
     @declared_attr
@@ -230,7 +230,7 @@ class UserBase(BaseMixin):
     def pickername(self):
         """Label name for this user, for identifying them in dropdown lists"""
         if self.username:
-            return u"{fullname} (@{username})".format(fullname=self.fullname, username=self.username)
+            return "{fullname} (@{username})".format(fullname=self.fullname, username=self.username)
         else:
             return self.fullname
 
@@ -241,7 +241,7 @@ class UserBase(BaseMixin):
     def owner_choices(self):
         """Return userids and titles of users and owned organizations for selection lists."""
         return [(self.userid, self.pickername)] + [
-            (o['userid'], u'{title} (@{name})'.format(title=o['title'], name=o['name'])) for o in self.organizations_owned()]
+            (o['userid'], '{title} (@{name})'.format(title=o['title'], name=o['name'])) for o in self.organizations_owned()]
 
     def teamowner_choices(self):
         """
@@ -253,7 +253,7 @@ class UserBase(BaseMixin):
         for team in self.userinfo.get('teams', []):
             teamsbyorg[team['org']].append(team)
         return [(self.userid, self.pickername)] + [
-            (u'{title} (@{name})'.format(title=orgs.get(orgid, {}).get('title', ''), name=orgs.get(orgid, {}).get('name', '')),
+            ('{title} (@{name})'.format(title=orgs.get(orgid, {}).get('title', ''), name=orgs.get(orgid, {}).get('name', '')),
                 [(team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])) for team in sorted(teams, key=lambda t: t['title'])])
             for orgid, teams in sorted(teamsbyorg.items(), key=lambda row: orgs.get(row[0], {}).get('title'))]
 
@@ -276,7 +276,7 @@ class UserBase(BaseMixin):
         result = [(self.userid, self.pickername)]
         for orgid in orgids:
             if orgid in ownedids:
-                result.append((orgid, u'{title} (@{name})'.format(title=orgs[orgid]['title'], name=orgs[orgid]['name'])))
+                result.append((orgid, '{title} (@{name})'.format(title=orgs[orgid]['title'], name=orgs[orgid]['name'])))
             for team in sorted(teamsbyorg[orgid], key=lambda team: team['title']):
                 result.append((team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])))
 
@@ -592,7 +592,7 @@ class ProfileMixin(object):
         if self.userid == self.name:
             return self.title
         else:
-            return u'{title} (@{name})'.format(title=self.title, name=self.name)
+            return '{title} (@{name})'.format(title=self.title, name=self.name)
 
     def permissions(self, user, inherited=None):
         parent = super(ProfileMixin, self)
@@ -628,10 +628,10 @@ class ProfileMixin(object):
         idsnames = {user.userid: {'name': user.profile_name, 'title': user.fullname}}
         for org in user.organizations_memberof():
             idsnames[org['userid']] = {'name': org['name'], 'title': org['title']}
-        namesids = dict([(value['name'], key) for key, value in idsnames.items()])
+        namesids = {value['name']: key for key, value in idsnames.items()}
 
         # First, check if Profile userids and names match
-        for profile in cls.query.filter(cls.name.in_(namesids.keys())).all():
+        for profile in cls.query.filter(cls.name.in_(list(namesids.keys()))).all():
             if profile.userid != namesids[profile.name]:
                 # This profile's userid and name don't match. Knock off the name
                 profile.name = make_name(profile.userid, maxlength=250,
@@ -641,7 +641,7 @@ class ProfileMixin(object):
         session.flush()
 
         # Second, check the other way around and keep this list of profiles
-        profiles = dict([(p.userid, p) for p in cls.query.filter(cls.userid.in_(idsnames.keys())).all()])
+        profiles = {p.userid: p for p in cls.query.filter(cls.userid.in_(list(idsnames.keys()))).all()}
         for profile in profiles.values():
             if profile.name != idsnames[profile.userid]['name']:
                 profile.name = idsnames[profile.userid]['name']

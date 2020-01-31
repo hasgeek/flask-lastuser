@@ -19,7 +19,7 @@ else:
 requires = [
     'coaster',
     'SQLAlchemy>=1.0',
-    'Flask-BabelEx',
+    'Flask-Babel2',
     'Flask',
     'requests',
     'six',
@@ -54,5 +54,6 @@ setup(
         ],
     dependency_links=[
         "https://github.com/hasgeek/coaster/archive/master.zip#egg=coaster-dev",
+        "https://github.com/hasgeek/flask-babel2/archive/master.zip#egg=flask_babel2",
         ],
     )

@@ -12,6 +12,8 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+from __future__ import unicode_literals
+
 import sys, os
 
 sys.path.append(os.path.abspath('../'))
@@ -43,8 +45,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'flask-lastuser'
-copyright = u'2012-17, HasGeek'
+project = 'flask-lastuser'
+copyright = '2012-20, HasGeek'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -186,8 +188,8 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'flask-lastuser.tex', u'flask-lastuser Documentation',
-   u'HasGeek', 'manual'),
+  ('index', 'flask-lastuser.tex', 'flask-lastuser Documentation',
+   'HasGeek', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -216,8 +218,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'flask-lastuser', u'flask-lastuser Documentation',
-     [u'HasGeek'], 1)
+    ('index', 'flask-lastuser', 'flask-lastuser Documentation',
+     ['HasGeek'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -230,8 +232,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'flask-lastuser', u'flask-lastuser Documentation',
-   u'HasGeek', 'flask-lastuser', 'Flask extension for Lastuser',
+  ('index', 'flask-lastuser', 'flask-lastuser Documentation',
+   'HasGeek', 'flask-lastuser', 'Flask extension for Lastuser',
    'Miscellaneous'),
 ]
 
