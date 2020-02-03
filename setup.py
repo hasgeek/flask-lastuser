@@ -20,7 +20,7 @@ requires = [
     'coaster',
     'SQLAlchemy>=1.0',
     'Flask-Babel2',
-    'Flask',
+    'Flask>=1.0',
     'requests',
     'six',
     ]
