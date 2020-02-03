@@ -12,7 +12,7 @@ from collections import defaultdict
 import six
 from six.moves.urllib.parse import urljoin
 from pytz import timezone
-from werkzeug import cached_property
+from werkzeug.utils import cached_property
 from flask import g, current_app
 from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, Table,
     PrimaryKeyConstraint, UniqueConstraint, MetaData)
