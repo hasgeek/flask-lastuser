@@ -17,7 +17,7 @@ import requests
 import re
 import weakref
 import itsdangerous
-from flask_babel2 import Domain
+from flask_babelhg import Domain
 try:
     from collections import OrderedDict
 except ImportError:
