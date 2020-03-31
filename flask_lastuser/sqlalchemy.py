@@ -7,48 +7,79 @@ SQLAlchemy extensions for Flask-Lastuser.
 """
 
 from __future__ import absolute_import, unicode_literals
+from six.moves.urllib.parse import urljoin
+import six
 
 from collections import defaultdict
-import six
-from six.moves.urllib.parse import urljoin
-from pytz import timezone
-from werkzeug.utils import cached_property
-from flask import g, current_app
-from sqlalchemy import (Column, Boolean, Integer, String, Unicode, ForeignKey, Table,
-    PrimaryKeyConstraint, UniqueConstraint, MetaData)
-from sqlalchemy.orm import deferred, undefer, relationship, synonym
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ForeignKey,
+    Integer,
+    MetaData,
+    PrimaryKeyConstraint,
+    String,
+    Table,
+    Unicode,
+    UniqueConstraint,
+)
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.orm import deferred, relationship, synonym, undefer
+
+from flask import current_app, g
+from werkzeug.utils import cached_property
+
+from pytz import timezone
 
 from coaster.auth import add_auth_attribute, current_auth
-from coaster.utils import getbool, make_name, require_one_of, LabeledEnum
-from coaster.sqlalchemy import make_timestamp_columns, failsafe_add, BaseMixin, JsonDict, BaseNameMixin
+from coaster.sqlalchemy import (
+    BaseMixin,
+    BaseNameMixin,
+    JsonDict,
+    failsafe_add,
+    make_timestamp_columns,
+)
+from coaster.utils import LabeledEnum, getbool, make_name, require_one_of
 
-from . import UserInfo, UserManagerBase, signal_user_looked_up, __
+from . import UserInfo, UserManagerBase, __, signal_user_looked_up
 
-
-__all__ = ['UserBase', 'UserBase2', 'TeamMixin', 'TeamMembersMixin', 'TeamBase', 'TeamBase2',
-    'ProfileMixin', 'ProfileMixin2', 'ProfileBase',
-    'UserManager', 'IncompleteUserMigration']
+__all__ = [
+    'UserBase',
+    'UserBase2',
+    'TeamMixin',
+    'TeamMembersMixin',
+    'TeamBase',
+    'TeamBase2',
+    'ProfileMixin',
+    'ProfileMixin2',
+    'ProfileBase',
+    'UserManager',
+    'IncompleteUserMigration',
+]
 
 
 class IncompleteUserMigration(Exception):
     """
     Could not migrate users because of data conflicts.
     """
-    pass
 
 
-class USER_STATUS(LabeledEnum):
-    ACTIVE = (0, __('Active'))        # Currently active
+class USER_STATUS(LabeledEnum):  # NOQA: N801
+    ACTIVE = (0, __('Active'))  # Currently active
     SUSPENDED = (1, __('Suspended'))  # Suspended upstream
-    MERGED = (2, __('Merged'))        # Merged locally (all data migrated)
-    DELETED = (3, __('Deleted'))      # Deleted but record preserved for foreign key references
+    MERGED = (2, __('Merged'))  # Merged locally (all data migrated)
+    DELETED = (
+        3,
+        __('Deleted'),
+    )  # Deleted but record preserved for foreign key references
 
 
 class UserBase(BaseMixin):
     """
     Base class for user definition.
     """
+
     __tablename__ = 'user'
 
     @declared_attr
@@ -115,7 +146,11 @@ class UserBase(BaseMixin):
         """The user's timezone as a string"""
         # Stored in userinfo since it was introduced later and a new column
         # will require migrations in downstream apps.
-        return self.userinfo and self.userinfo.get('timezone') or current_app.config.get('TIMEZONE')
+        return (
+            self.userinfo
+            and self.userinfo.get('timezone')
+            or current_app.config.get('TIMEZONE')
+        )
 
     @property
     def oldids(self):
@@ -157,11 +192,14 @@ class UserBase(BaseMixin):
         """
         Do nothing. Implemented from UserBase2 onwards.
         """
-        pass
 
     def organizations_owned(self):
         """Organizations owned by this user"""
-        if self.userinfo and self.userinfo.get('organizations') and 'owner' in self.userinfo['organizations']:
+        if (
+            self.userinfo
+            and self.userinfo.get('organizations')
+            and 'owner' in self.userinfo['organizations']
+        ):
             return list(self.userinfo['organizations']['owner'])
         else:
             return []
@@ -176,7 +214,11 @@ class UserBase(BaseMixin):
 
     def organizations_memberof(self):
         """Organizations that this user is a member of"""
-        if self.userinfo and self.userinfo.get('organizations') and 'member' in self.userinfo['organizations']:
+        if (
+            self.userinfo
+            and self.userinfo.get('organizations')
+            and 'member' in self.userinfo['organizations']
+        ):
             return list(self.userinfo['organizations']['member'])
         else:
             return []
@@ -206,7 +248,9 @@ class UserBase(BaseMixin):
         return [team['userid'] for team in self.userinfo.get('teams', [])]
 
     def user_team_ids(self):
-        return [self.userid] + [team['userid'] for team in self.userinfo.get('teams', [])]
+        return [self.userid] + [
+            team['userid'] for team in self.userinfo.get('teams', [])
+        ]
 
     def teammember_of(self, userid):
         if not isinstance(userid, six.string_types):
@@ -230,7 +274,9 @@ class UserBase(BaseMixin):
     def pickername(self):
         """Label name for this user, for identifying them in dropdown lists"""
         if self.username:
-            return "{fullname} (@{username})".format(fullname=self.fullname, username=self.username)
+            return "{fullname} (@{username})".format(
+                fullname=self.fullname, username=self.username
+            )
         else:
             return self.fullname
 
@@ -241,44 +287,82 @@ class UserBase(BaseMixin):
     def owner_choices(self):
         """Return userids and titles of users and owned organizations for selection lists."""
         return [(self.userid, self.pickername)] + [
-            (o['userid'], '{title} (@{name})'.format(title=o['title'], name=o['name'])) for o in self.organizations_owned()]
+            (o['userid'], '{title} (@{name})'.format(title=o['title'], name=o['name']))
+            for o in self.organizations_owned()
+        ]
 
     def teamowner_choices(self):
         """
         Return userids and titles of user and all teams the user is a member of, grouped by organization.
         """
-        orgs = {org['userid']: org for byorgtype in self.userinfo.get('organizations', {}).values()
-            for org in byorgtype}
+        orgs = {
+            org['userid']: org
+            for byorgtype in self.userinfo.get('organizations', {}).values()
+            for org in byorgtype
+        }
         teamsbyorg = defaultdict(list)
         for team in self.userinfo.get('teams', []):
             teamsbyorg[team['org']].append(team)
         return [(self.userid, self.pickername)] + [
-            ('{title} (@{name})'.format(title=orgs.get(orgid, {}).get('title', ''), name=orgs.get(orgid, {}).get('name', '')),
-                [(team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])) for team in sorted(teams, key=lambda t: t['title'])])
-            for orgid, teams in sorted(teamsbyorg.items(), key=lambda row: orgs.get(row[0], {}).get('title'))]
+            (
+                '{title} (@{name})'.format(
+                    title=orgs.get(orgid, {}).get('title', ''),
+                    name=orgs.get(orgid, {}).get('name', ''),
+                ),
+                [
+                    (
+                        team['userid'],
+                        '%s / %s'
+                        % (orgs.get(orgid, {}).get('title', ''), team['title']),
+                    )
+                    for team in sorted(teams, key=lambda t: t['title'])
+                ],
+            )
+            for orgid, teams in sorted(
+                teamsbyorg.items(), key=lambda row: orgs.get(row[0], {}).get('title')
+            )
+        ]
 
     def allowner_choices(self):
         """
         Return userids and titles of the user, all organizations owned by the user, and all teams the user
         is a member of
         """
-        orgs = {org['userid']: org for byorgtype in self.userinfo.get('organizations', {}).values()
-            for org in byorgtype}
+        orgs = {
+            org['userid']: org
+            for byorgtype in self.userinfo.get('organizations', {}).values()
+            for org in byorgtype
+        }
         teamsbyorg = defaultdict(list)
         for team in self.userinfo.get('teams', []):
             teamsbyorg[team['org']].append(team)
         for orgid in orgs:
             if orgid not in teamsbyorg:
                 teamsbyorg[orgid] = []
-        orgids = sorted(teamsbyorg.keys(), key=lambda orgid: orgs.get(orgid, {}).get('title'))
+        orgids = sorted(
+            teamsbyorg.keys(), key=lambda orgid: orgs.get(orgid, {}).get('title')
+        )
         ownedids = set(self.organizations_owned_ids())
 
         result = [(self.userid, self.pickername)]
         for orgid in orgids:
             if orgid in ownedids:
-                result.append((orgid, '{title} (@{name})'.format(title=orgs[orgid]['title'], name=orgs[orgid]['name'])))
+                result.append(
+                    (
+                        orgid,
+                        '{title} (@{name})'.format(
+                            title=orgs[orgid]['title'], name=orgs[orgid]['name']
+                        ),
+                    )
+                )
             for team in sorted(teamsbyorg[orgid], key=lambda team: team['title']):
-                result.append((team['userid'], '%s / %s' % (orgs.get(orgid, {}).get('title', ''), team['title'])))
+                result.append(
+                    (
+                        team['userid'],
+                        '%s / %s'
+                        % (orgs.get(orgid, {}).get('title', ''), team['title']),
+                    )
+                )
 
         return result
 
@@ -331,7 +415,10 @@ def _do_merge_into(instance, other, helper_method=None):
                 # here. This is why model.helper_method below (migrate_user or
                 # migrate_profile) returns a list of table names it has
                 # processed.
-                current_app.logger.debug("do_migrate_table interrupted because column is unique: %s" % column)
+                current_app.logger.debug(
+                    "do_migrate_table interrupted because column is unique: {column}",
+                    extra={'column': column},
+                )
                 return False
 
         # Now check for multi-column indexes
@@ -342,18 +429,28 @@ def _do_merge_into(instance, other, helper_method=None):
                         # The target column (typically user_id) is part of a unique
                         # or primary key constraint. We can't migrate automatically.
                         current_app.logger.debug(
-                            "do_migrate_table interrupted because column is part of a unique constraint: %s" % column)
+                            "do_migrate_table interrupted because column is part of a "
+                            "unique constraint: {column}",
+                            extra={'column': column},
+                        )
                         return False
 
         # TODO: If this table uses Flask-SQLAlchemy's bind_key mechanism, session.execute won't bind
         # to the correct engine, so the table cannot be migrated. If we attempt to retrieve and connect
         # to the correct engine, we may lose the transaction. We need to confirm this.
         if table.info.get('bind_key'):
-            current_app.logger.debug("do_migrate_table interrupted because table has bind_key: %s" % table.name)
+            current_app.logger.debug(
+                "do_migrate_table interrupted because table has bind_key: {table}",
+                extra={'table': table.name},
+            )
             return False
 
         for column in target_columns:
-            session.execute(table.update().where(column == instance.id).values(**{column.name: other.id}))
+            session.execute(
+                table.update()
+                .where(column == instance.id)
+                .values(**{column.name: other.id})
+            )
             session.flush()
 
         # All done, table successfully migrated. Hurrah!
@@ -372,7 +469,10 @@ def _do_merge_into(instance, other, helper_method=None):
                 except IncompleteUserMigration:
                     safe_to_remove_instance = False
                     current_app.logger.debug(
-                        "_do_merge_into interrupted because IncompleteUserMigration raised by %s" % model)
+                        "_do_merge_into interrupted because IncompleteUserMigration "
+                        "raised by {model}",
+                        extra={'model': model},
+                    )
             else:
                 # No model-backed migration. Figure out all foreign key references to user table
                 if not do_migrate_table(model.__table__):
@@ -393,6 +493,7 @@ class StatusMixin(object):
     """
     Mixin class providing the status column and helper methods.
     """
+
     @declared_attr
     def status(cls):
         return Column(Integer, nullable=False, default=USER_STATUS.ACTIVE)
@@ -424,6 +525,7 @@ class UserMergeMixin(StatusMixin):
     Mixin class adding support for user status and merging. Don't use this mixin
     directly. Use :class:`UserBase2` or a later base class instead.
     """
+
     @classmethod
     def get(cls, username=None, userid=None, defercols=True):
         """
@@ -433,7 +535,9 @@ class UserMergeMixin(StatusMixin):
         :param str username: Username to lookup
         :param str userid: Userid to lookup
         """
-        user = super(UserMergeMixin, cls).get(username=username, userid=userid, defercols=defercols)
+        user = super(UserMergeMixin, cls).get(
+            username=username, userid=userid, defercols=defercols
+        )
 
         if user and user.status == USER_STATUS.MERGED:
             user = user.merged_user()
@@ -457,28 +561,39 @@ class UserMergeMixin(StatusMixin):
 
     def merge_accounts(self):
         if self.oldids:
-            for olduser in self.__class__.query.filter(self.__class__.userid.in_(self.oldids)).all():
+            for olduser in self.__class__.query.filter(
+                self.__class__.userid.in_(self.oldids)
+            ).all():
                 olduser.merge_into(self)
 
     def merge_into(self, user):
         """
         Merge self into the specified user and relink all
         """
-        current_app.logger.debug("Preparing to merge %s into %s." % (self, user))
+        current_app.logger.debug(
+            "Preparing to merge {self} into {user}.",
+            extra={'self': repr(self), 'user': repr(user)},
+        )
         if self.status == USER_STATUS.MERGED:
-            current_app.logger.debug("Ignoring merge request because we are already merged.")
+            current_app.logger.debug(
+                "Ignoring merge request because we are already merged."
+            )
             return  # We are already merged, so ignore this call
 
         safe_to_remove_user = _do_merge_into(self, user, 'migrate_user')
 
-        # Release claim to username and email (unique properties) and mark self as merged
+        # Release claim to username and email (unique properties)
+        # and mark self as merged
         self.username = None
         self.email = None
         if safe_to_remove_user:
             self.status = USER_STATUS.MERGED
-            current_app.logger.debug("%s is now merged" % self)
+            current_app.logger.debug("{self} is now merged", extra={'self': repr(self)})
 
-        current_app.logger.debug("Safe to remove %s: %s" % (self, safe_to_remove_user))
+        current_app.logger.debug(
+            "Safe to remove {self}: {user}",
+            extra={'self': repr(self), 'user': repr(safe_to_remove_user)},
+        )
         return safe_to_remove_user
 
 
@@ -487,7 +602,6 @@ class UserBase2(UserMergeMixin, UserBase):
     Version 2 of UserBase, adding support for user status and merging. Inherits from
     :class:`UserMergeMixin` and :class:`UserBase`.
     """
-    pass
 
 
 class TeamMixin(BaseMixin):
@@ -520,22 +634,31 @@ class TeamMixin(BaseMixin):
         session = cls.query.session
         users_teams = cls.metadata.tables['users_teams']
 
-        affected_team_ids = set([r.team_id for r in session.query(
-            users_teams).filter_by(user_id=olduser.id).all()])
+        affected_team_ids = {
+            r.team_id
+            for r in session.query(users_teams).filter_by(user_id=olduser.id).all()
+        }
 
         # newuser is already in these teams
-        unaffected_team_ids = set([r.team_id for r in session.query(
-            users_teams).filter_by(user_id=newuser.id).all()])
+        unaffected_team_ids = {
+            r.team_id
+            for r in session.query(users_teams).filter_by(user_id=newuser.id).all()
+        }
 
         migrate_team_ids = affected_team_ids - unaffected_team_ids
         remove_team_ids = affected_team_ids.intersection(unaffected_team_ids)
 
-        session.execute(users_teams.update().where(
-            users_teams.c.user_id == olduser.id).where(
-                users_teams.c.team_id.in_(migrate_team_ids)).values(user_id=newuser.id))
-        session.execute(users_teams.delete(
-            users_teams.c.user_id == olduser.id).where(
-                users_teams.c.team_id.in_(remove_team_ids)))
+        session.execute(
+            users_teams.update()
+            .where(users_teams.c.user_id == olduser.id)
+            .where(users_teams.c.team_id.in_(migrate_team_ids))
+            .values(user_id=newuser.id)
+        )
+        session.execute(
+            users_teams.delete(users_teams.c.user_id == olduser.id).where(
+                users_teams.c.team_id.in_(remove_team_ids)
+            )
+        )
 
         # We handled migrations in the users_teams table, so let the caller know
         return ['users_teams']
@@ -577,6 +700,7 @@ class ProfileMixin(object):
     Subclasses must provide their own columns including the mandatory name,
     title and buid or userid. Use ProfileBase to get these columns.
     """
+
     @declared_attr
     def userid(cls):
         """Synonym for buid if the model has no existing userid column."""
@@ -585,7 +709,9 @@ class ProfileMixin(object):
     def owner_is(self, user):
         if not user:
             return False
-        return self.userid == user.userid or self.userid in user.organizations_owned_ids()
+        return (
+            self.userid == user.userid or self.userid in user.organizations_owned_ids()
+        )
 
     @property
     def pickername(self):
@@ -602,17 +728,26 @@ class ProfileMixin(object):
             perms = set()
         perms.add('view')
         if user and (
-                self.userid in user.user_organizations_owned_ids()
-                or self.userid in user.oldids):
+            self.userid in user.user_organizations_owned_ids()
+            or self.userid in user.oldids
+        ):
             perms.add('edit')
             perms.add('delete')
             perms.add('new')
         return perms
 
     @classmethod
-    def update_from_user(cls, user, session, parent=None,
-            type_user=None, type_org=None, type_col='type',
-            make_user_profiles=True, make_org_profiles=True):
+    def update_from_user(
+        cls,
+        user,
+        session,
+        parent=None,
+        type_user=None,
+        type_org=None,
+        type_col='type',
+        make_user_profiles=True,
+        make_org_profiles=True,
+    ):
         """
         Update profiles from the given user and user's organizations.
 
@@ -634,14 +769,22 @@ class ProfileMixin(object):
         for profile in cls.query.filter(cls.name.in_(list(namesids.keys()))).all():
             if profile.userid != namesids[profile.name]:
                 # This profile's userid and name don't match. Knock off the name
-                profile.name = make_name(profile.userid, maxlength=250,
-                    checkused=lambda c: True if session.query(cls.name).filter_by(name=c).first() else False)
+                profile.name = make_name(
+                    profile.userid,
+                    maxlength=250,
+                    checkused=lambda c: True
+                    if session.query(cls.name).filter_by(name=c).first()
+                    else False,
+                )
 
         # Flush this to the db for constraint integrity
         session.flush()
 
         # Second, check the other way around and keep this list of profiles
-        profiles = {p.userid: p for p in cls.query.filter(cls.userid.in_(list(idsnames.keys()))).all()}
+        profiles = {
+            p.userid: p
+            for p in cls.query.filter(cls.userid.in_(list(idsnames.keys()))).all()
+        }
         for profile in profiles.values():
             if profile.name != idsnames[profile.userid]['name']:
                 profile.name = idsnames[profile.userid]['name']
@@ -655,9 +798,16 @@ class ProfileMixin(object):
         if make_user_profiles:
             if user.userid not in profiles:
                 if parent is not None:
-                    profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname, parent=parent)
+                    profile = cls(
+                        userid=user.userid,
+                        name=user.profile_name,
+                        title=user.fullname,
+                        parent=parent,
+                    )
                 else:
-                    profile = cls(userid=user.userid, name=user.profile_name, title=user.fullname)
+                    profile = cls(
+                        userid=user.userid, name=user.profile_name, title=user.fullname
+                    )
                 if type_user is not None:
                     setattr(profile, type_col, type_user)
                 session.add(profile)
@@ -666,9 +816,16 @@ class ProfileMixin(object):
             for org in user.organizations_memberof():
                 if org['userid'] not in profiles:
                     if parent is not None:
-                        profile = cls(userid=org['userid'], name=org['name'], title=org['title'], parent=parent)
+                        profile = cls(
+                            userid=org['userid'],
+                            name=org['name'],
+                            title=org['title'],
+                            parent=parent,
+                        )
                     else:
-                        profile = cls(userid=org['userid'], name=org['name'], title=org['title'])
+                        profile = cls(
+                            userid=org['userid'], name=org['name'], title=org['title']
+                        )
                     if type_org is not None:
                         setattr(profile, type_col, type_org)
                     session.add(profile)
@@ -703,14 +860,18 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
         require_one_of(name=name, userid=userid, buid=buid)
 
         if userid:
-            profile = cls.query.filter_by(userid=userid, status=USER_STATUS.ACTIVE).one_or_none()
+            profile = cls.query.filter_by(
+                userid=userid, status=USER_STATUS.ACTIVE
+            ).one_or_none()
         elif buid:
             # buid is used in Nodular, where it has slightly different semantics from
             # userid: buid always gets the Node if it exists, so there's no check
             # against the status column
             profile = cls.query.filter_by(buid=buid).one_or_none()
         else:
-            profile = cls.query.filter_by(name=name, status=USER_STATUS.ACTIVE).one_or_none()
+            profile = cls.query.filter_by(
+                name=name, status=USER_STATUS.ACTIVE
+            ).one_or_none()
 
         if profile.is_merged:
             profile = profile.merged_profile()
@@ -740,10 +901,14 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
         if lastuser:
             userinfo = lastuser.getuser_by_userid(self.userid)
             if userinfo:
-                if userinfo['userid'] != self.userid and self.userid in userinfo.get('oldids', []):
+                if userinfo['userid'] != self.userid and self.userid in userinfo.get(
+                    'oldids', []
+                ):
                     # This Profile has gone away. Does the new profile exist here?
                     with self.query.session.no_autoflush:
-                        profile = self.query.filter_by(userid=userinfo['userid']).first()
+                        profile = self.query.filter_by(
+                            userid=userinfo['userid']
+                        ).first()
                     if profile is not None:
                         safe_to_remove = self.merge_into(profile)
                         if safe_to_remove:
@@ -754,7 +919,9 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
                         self.status = USER_STATUS.ACTIVE
                 if userinfo['name'] is not None:
                     with self.query.session.no_autoflush:
-                        moveprofile = self.query.filter_by(name=userinfo['name']).first()
+                        moveprofile = self.query.filter_by(
+                            name=userinfo['name']
+                        ).first()
                     if moveprofile and moveprofile != self:
                         # There's another profile holding our desired name. Move it out of the way
                         moveprofile.name = moveprofile.userid
@@ -797,6 +964,7 @@ class ProfileBase(ProfileMixin2, BaseNameMixin):
     """
     Base class for profiles
     """
+
     @declared_attr
     def userid(cls):
         return Column(Unicode(22), nullable=False, unique=True)
@@ -814,37 +982,59 @@ def make_user_team_table(base, timezone=False):
     if 'users_teams' in base.metadata.tables:
         return base.metadata.tables['users_teams']
     else:
-        return Table('users_teams', base.metadata, *(make_timestamp_columns(timezone=timezone) + (
-            Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
-            Column('team_id', Integer, ForeignKey('team.id'), primary_key=True)
-            )))
+        return Table(
+            'users_teams',
+            base.metadata,
+            *(
+                make_timestamp_columns(timezone=timezone)
+                + (
+                    Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
+                    Column('team_id', Integer, ForeignKey('team.id'), primary_key=True),
+                )
+            ),
+        )
 
 
 class UserManager(UserManagerBase):
     """
     User manager that automatically loads the current user's object from the database.
     """
+
     def __init__(self, db, usermodel, teammodel=None):
         self.db = db
         self.usermodel = usermodel
         self.teammodel = teammodel
         if teammodel is not None:
-            self.users_teams = make_user_team_table(db.Model,
-                timezone=getattr(usermodel, '__with_timezone__', False))
+            self.users_teams = make_user_team_table(
+                db.Model, timezone=getattr(usermodel, '__with_timezone__', False)
+            )
 
     def load_user(self, userid, uuid=None, create=False):
         # TODO: How do we cache this? Connect to a cache manager
-        if uuid and hasattr(self.usermodel, '__uuid_primary_key__') and self.usermodel.__uuid_primary_key__:
-            user = self.usermodel.query.get(uuid)  # This loads from SQLAlchemy session cache
+        if (
+            uuid
+            and hasattr(self.usermodel, '__uuid_primary_key__')
+            and self.usermodel.__uuid_primary_key__
+        ):
+            user = self.usermodel.query.get(
+                uuid
+            )  # This loads from SQLAlchemy session cache
         elif hasattr(self.usermodel, 'get'):
             user = self.usermodel.get(userid=userid, defercols=False)
         else:
-            user = self.usermodel.query.filter_by(
-                userid=userid).options(undefer('userinfo')).one_or_none()
+            user = (
+                self.usermodel.query.filter_by(userid=userid)
+                .options(undefer('userinfo'))
+                .one_or_none()
+            )
         if user is None:
             if create:
                 user = self.usermodel(userid=userid)
-                if uuid and hasattr(self.usermodel, '__uuid_primary_key__') and self.usermodel.__uuid_primary_key__:
+                if (
+                    uuid
+                    and hasattr(self.usermodel, '__uuid_primary_key__')
+                    and self.usermodel.__uuid_primary_key__
+                ):
                     user.id = uuid
                 failsafe_add(self.db.session, user, userid=userid)
         return user
@@ -856,21 +1046,25 @@ class UserManager(UserManagerBase):
             return self.usermodel.query.filter_by(username=username).first()
 
     def make_userinfo(self, user):
-        return UserInfo(token=user.lastuser_token,
-                        token_type=user.lastuser_token_type,
-                        token_scope=user.lastuser_token_scope,
-                        userid=user.userid,
-                        username=user.username,
-                        fullname=user.fullname,
-                        email=user.email,
-                        permissions=user.userinfo.get('permissions', ()) if user.userinfo else (),
-                        organizations=user.userinfo.get('organizations') if user.userinfo else None)
+        return UserInfo(
+            token=user.lastuser_token,
+            token_type=user.lastuser_token_type,
+            token_scope=user.lastuser_token_scope,
+            userid=user.userid,
+            username=user.username,
+            fullname=user.fullname,
+            email=user.email,
+            permissions=user.userinfo.get('permissions', ()) if user.userinfo else (),
+            organizations=user.userinfo.get('organizations') if user.userinfo else None,
+        )
 
     def load_user_userinfo(self, userinfo, access_token=None, update=False):
         """
         Load a user and update data from the userinfo.
         """
-        user = self.load_user(userid=userinfo['userid'], uuid=userinfo.get('uuid'), create=True)
+        user = self.load_user(
+            userid=userinfo['userid'], uuid=userinfo.get('uuid'), create=True
+        )
 
         # Watch for username/email conflicts. Remove from any existing user
         # that have the same username or email, for a conflict can only mean
@@ -879,14 +1073,18 @@ class UserManager(UserManagerBase):
         if olduser is not None and olduser.id != user.id:
             olduser.username = None
         if userinfo.get('email'):
-            olduser = self.usermodel.query.filter_by(email=userinfo.get('email')).first()
+            olduser = self.usermodel.query.filter_by(
+                email=userinfo.get('email')
+            ).first()
             if olduser is not None and olduser.id != user.id:
                 olduser.email = None
 
         # Next, watch for lastuser_token conflicts. This can happen when user
         # accounts are merged and we haven't yet detected that.
         if access_token is not None:
-            olduser = self.usermodel.query.filter_by(lastuser_token=access_token).first()
+            olduser = self.usermodel.query.filter_by(
+                lastuser_token=access_token
+            ).first()
             if olduser is not None and olduser.id != user.id:
                 olduser.lastuser_token = None
                 olduser.lastuser_token_type = None
@@ -936,22 +1134,33 @@ class UserManager(UserManagerBase):
                 org_teams.setdefault(t['org'], []).append(t)
 
             for orgid, teams in org_teams.items():
-                if {'*', 'teams', 'teams/*'}.intersection(user.access_scope) and orgid in user.organizations_owned_ids():
+                if {'*', 'teams', 'teams/*'}.intersection(
+                    user.access_scope
+                ) and orgid in user.organizations_owned_ids():
                     # 1/4: Remove teams that are no longer in lastuser, provided we have
                     # an authoritative list ('teams' is in scope and the user owns the organization)
-                    removed_teams = self.teammodel.query.filter_by(orgid=orgid).filter(
-                        ~self.teammodel.userid.in_([t['userid'] for t in teams])).all()
+                    removed_teams = (
+                        self.teammodel.query.filter_by(orgid=orgid)
+                        .filter(
+                            ~self.teammodel.userid.in_([t['userid'] for t in teams])
+                        )
+                        .all()
+                    )
                     for team in removed_teams:
                         self.db.session.delete(team)
 
                 for teamdata in teams:
                     # 2/4: Create teams
-                    team = self.teammodel.query.filter_by(userid=teamdata['userid']).first()
+                    team = self.teammodel.query.filter_by(
+                        userid=teamdata['userid']
+                    ).first()
                     if team is None:
-                        team = self.teammodel(userid=teamdata['userid'],
-                                              orgid=teamdata['org'],
-                                              title=teamdata['title'],
-                                              owners=getbool(teamdata['owners']))
+                        team = self.teammodel(
+                            userid=teamdata['userid'],
+                            orgid=teamdata['org'],
+                            title=teamdata['title'],
+                            owners=getbool(teamdata['owners']),
+                        )
                         team.members = getbool(teamdata['members'])
                         self.db.session.add(team)
                     else:

@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 import os
 import re
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(here, 'README.rst')) as f:
@@ -23,7 +25,7 @@ requires = [
     'Flask>=1.0',
     'requests',
     'six',
-    ]
+]
 
 setup(
     name='Flask-Lastuser',
@@ -50,10 +52,10 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
-        'Topic :: Software Development :: Libraries :: Python Modules'
-        ],
+        'Topic :: Software Development :: Libraries :: Python Modules',
+    ],
     dependency_links=[
         "https://github.com/hasgeek/coaster/archive/master.zip#egg=coaster-dev",
-        "https://github.com/hasgeek/flask-babelhg/archive/master.zip#egg=Flask-Babelhg-0.12.3"
-        ],
-    )
+        "https://github.com/hasgeek/flask-babelhg/archive/master.zip#egg=Flask-Babelhg-0.12.3",
+    ],
+)
