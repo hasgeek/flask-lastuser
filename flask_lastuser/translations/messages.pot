@@ -32,4 +32,3 @@ msgstr ""
 #: flask_lastuser/sqlalchemy.py:41
 msgid "Deleted"
 msgstr ""
-

@@ -41,7 +41,10 @@ class TestMergeUserData(unittest.TestCase):
         self.ctx.pop()
 
     def create_test_data(self):
-        user1 = User(userid="1234567890123456789012", username="user1", fullname="User 1",
+        user1 = User(
+            userid="1234567890123456789012",
+            username="user1",
+            fullname="User 1",
             email='user1@example.com',
             userinfo={
                 'timezone': 'Asia/Kolkata',
@@ -51,18 +54,22 @@ class TestMergeUserData(unittest.TestCase):
                             'userid': 'qazwsxedcrfvtgbyhnujmi',
                             'name': 'org1',
                             'title': 'Organization 1',
-                            },
-                        ],
+                        }
+                    ],
                     'owner': [
                         {
                             'userid': 'qazwsxedcrfvtgbyhnujmi',
                             'name': 'org1',
                             'title': 'Organization 1',
-                            },
-                        ]
-                    }
-                })
-        user2 = User(userid="0987654321098765432109", username="user2", fullname="User 2",
+                        }
+                    ],
+                },
+            },
+        )
+        user2 = User(
+            userid="0987654321098765432109",
+            username="user2",
+            fullname="User 2",
             email='user2@example.com',
             userinfo={
                 'timezone': 'Asia/Kolkata',
@@ -72,28 +79,32 @@ class TestMergeUserData(unittest.TestCase):
                             'userid': 'qwertyuiopasdfghjklzxc',
                             'name': 'org2',
                             'title': 'Organization 2',
-                            },
+                        },
                         {
                             'userid': 'mnbvcxzlkjhgfdsapoiuyt',
                             'name': 'org3',
                             'title': 'Organization 3',
-                            },
-                        ],
+                        },
+                    ],
                     'owner': [
                         {
                             'userid': 'qwertyuiopasdfghjklzxc',
                             'name': 'org2',
                             'title': 'Organization 2',
-                            },
+                        },
                         {
                             'userid': 'mnbvcxzlkjhgfdsapoiuyt',
                             'name': 'org3',
                             'title': 'Organization 3',
-                            },
-                        ]
-                    }
-                })
-        user3 = User(userid="1234567890987654321234", username="user3", fullname="User 3",
+                        },
+                    ],
+                },
+            },
+        )
+        user3 = User(
+            userid="1234567890987654321234",
+            username="user3",
+            fullname="User 3",
             email='user3@example.com',
             userinfo={
                 'timezone': 'Asia/Kolkata',
@@ -103,34 +114,47 @@ class TestMergeUserData(unittest.TestCase):
                             'userid': 'mnbvcxzlkjhgfdsapoiuyt',
                             'name': 'org3',
                             'title': 'Organization 3',
-                            },
+                        },
                         {
                             'userid': 'qazwsxedcrfvtgbyhnujmi',
                             'name': 'org1',
                             'title': 'Organization 1',
-                            },
-                        ],
+                        },
+                    ],
                     'owner': [
                         {
                             'userid': 'mnbvcxzlkjhgfdsapoiuyt',
                             'name': 'org3',
                             'title': 'Organization 3',
-                            },
+                        },
                         {
                             'userid': 'qazwsxedcrfvtgbyhnujmi',
                             'name': 'org1',
                             'title': 'Organization 1',
-                            },
-                        ]
-                    }
-                })
+                        },
+                    ],
+                },
+            },
+        )
 
-        team1 = Team(userid="1324354657687980089786", orgid="qazwsxedcrfvtgbyhnujmi",
-            title="Team 1", users=[user1, user2])
-        team2 = Team(userid="0897867564534231243546", orgid="qwertyuiopasdfghjklzxc",
-            title="Team 2", users=[user2, user3])
-        team3 = Team(userid="1324354657687980132435", orgid="mnbvcxzlkjhgfdsapoiuyt",
-            title="Team 3", users=[user3, user1])
+        team1 = Team(
+            userid="1324354657687980089786",
+            orgid="qazwsxedcrfvtgbyhnujmi",
+            title="Team 1",
+            users=[user1, user2],
+        )
+        team2 = Team(
+            userid="0897867564534231243546",
+            orgid="qwertyuiopasdfghjklzxc",
+            title="Team 2",
+            users=[user2, user3],
+        )
+        team3 = Team(
+            userid="1324354657687980132435",
+            orgid="mnbvcxzlkjhgfdsapoiuyt",
+            title="Team 3",
+            users=[user3, user1],
+        )
 
         db.session.add_all([user1, user2, user3, team1, team2, team3])
         db.session.flush()
@@ -148,8 +172,10 @@ class TestWithoutMerge(TestMergeUserData):
         profiles = Profile.query.all()
         # Six profiles (3 users + 3 orgs)
         self.assertEqual(len(profiles), 6)
-        self.assertEqual(set([profile.name for profile in profiles]),
-            set(['user1', 'user2', 'user3', 'org1', 'org2', 'org3']))
+        self.assertEqual(
+            {profile.name for profile in profiles},
+            {'user1', 'user2', 'user3', 'org1', 'org2', 'org3'},
+        )
 
     def test_team_users(self):
         user1 = User.query.filter_by(userid="1234567890123456789012").one()
@@ -164,9 +190,9 @@ class TestWithoutMerge(TestMergeUserData):
         self.assertTrue(user1.is_active)
         self.assertTrue(user1.is_active)
 
-        self.assertEqual(set(team1.users), set([user1, user2]))
-        self.assertEqual(set(team2.users), set([user2, user3]))
-        self.assertEqual(set(team3.users), set([user3, user1]))
+        self.assertEqual(set(team1.users), {user1, user2})
+        self.assertEqual(set(team2.users), {user2, user3})
+        self.assertEqual(set(team3.users), {user3, user1})
 
 
 class TestUserMerge(TestMergeUserData):
@@ -195,12 +221,12 @@ class TestUserMerge(TestMergeUserData):
 
     def test_merge_removes_username(self):
         self.assertEqual(self.user1.username, 'user1')
-        self.assertEqual(self.user2.username, None)
+        self.assertIsNone(self.user2.username)
         self.assertEqual(self.user3.username, 'user3')
 
     def test_merge_removes_email(self):
         self.assertEqual(self.user1.email, 'user1@example.com')
-        self.assertEqual(self.user2.email, None)
+        self.assertIsNone(self.user2.email)
         self.assertEqual(self.user3.email, 'user3@example.com')
 
     def test_user_is_merged(self):
@@ -210,11 +236,11 @@ class TestUserMerge(TestMergeUserData):
 
     def test_teams_user2_is_removed(self):
         # Was [user1, user2], but user2 is merged into user1 and so redundant
-        self.assertEqual(set(self.team1.users), set([self.user1]))
+        self.assertEqual(set(self.team1.users), {self.user1})
         # Was [user2, user3], but user2 is replaced with user1
-        self.assertEqual(set(self.team2.users), set([self.user1, self.user3]))
+        self.assertEqual(set(self.team2.users), {self.user1, self.user3})
         # Was and is [user3, user1]. user2 is not involved here
-        self.assertEqual(set(self.team3.users), set([self.user3, self.user1]))
+        self.assertEqual(set(self.team3.users), {self.user3, self.user1})
 
     def test_user_get_username(self):
         user1 = User.get(username='user1')
@@ -222,7 +248,7 @@ class TestUserMerge(TestMergeUserData):
         user3 = User.get(username='user3')
 
         self.assertEqual(user1, self.user1)
-        self.assertEqual(user2, None)  # Username doesn't exist anymore
+        self.assertIsNone(user2)  # Username doesn't exist anymore
         self.assertEqual(user3, self.user3)
 
     @mocketize
@@ -230,20 +256,24 @@ class TestUserMerge(TestMergeUserData):
         # Handler for `user2 = User.get(...)`
         Entry.single_register(
             Entry.POST,
-            self.lastuser.endpoint_url(current_app.lastuser_config['getuser_userid_endpoint']),
-            body=json.dumps({
-                "status": "ok",
-                "type": "user",
-                "buid": "1234567890123456789012",
-                "userid": "1234567890123456789012",
-                "name": "user1",
-                "title": "User 1",
-                "label": "User 1 (@user1)",
-                "oldids": ['0987654321098765432109'],
-                "timezone": "Asia/Kolkata",
-                }),
-            headers={'content-type': 'application/json'}
-            )
+            self.lastuser.endpoint_url(
+                current_app.lastuser_config['getuser_userid_endpoint']
+            ),
+            body=json.dumps(
+                {
+                    "status": "ok",
+                    "type": "user",
+                    "buid": "1234567890123456789012",
+                    "userid": "1234567890123456789012",
+                    "name": "user1",
+                    "title": "User 1",
+                    "label": "User 1 (@user1)",
+                    "oldids": ['0987654321098765432109'],
+                    "timezone": "Asia/Kolkata",
+                }
+            ),
+            headers={'content-type': 'application/json'},
+        )
 
         user1 = User.get(userid="1234567890123456789012")
         user2 = User.get(userid="0987654321098765432109")

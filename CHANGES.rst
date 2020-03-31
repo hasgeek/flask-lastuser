@@ -1,3 +1,8 @@
+0.4.1
+-----
+
+* Code reformatted using Black
+
 0.4.0
 -----
 
