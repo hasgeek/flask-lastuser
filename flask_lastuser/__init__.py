@@ -530,16 +530,17 @@ class Lastuser(object):
                     value=current_app.lastuser_config['serializer'].dumps(
                         current_auth.cookie, header_fields={'v': 1}
                     ),
-                    max_age=31557600,  # Keep this cookie for a year.
-                    expires=expires,  # Expire one year from now.
-                    domain=current_app.config.get(
-                        'LASTUSER_COOKIE_DOMAIN'
-                    ),  # Place cookie in master domain.
-                    secure=current_app.config[
-                        'SESSION_COOKIE_SECURE'
-                    ],  # HTTPS cookie if session is too.
+                    # Keep this cookie for a year.
+                    max_age=31557600,
+                    # Expire one year from now.
+                    expires=expires,
+                    # Place cookie in master domain.
+                    domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),
+                    # HTTPS cookie if session is too.
+                    secure=current_app.config['SESSION_COOKIE_SECURE'],
+                    # Don't allow reading this from JS.
                     httponly=True,
-                )  # Don't allow reading this from JS.
+                )
         return response
 
     def requires_login(self, f):
