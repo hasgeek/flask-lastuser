@@ -1161,7 +1161,7 @@ class UserManager(UserManagerBase):
                             title=teamdata['title'],
                             owners=getbool(teamdata['owners']),
                         )
-                        team.members = getbool(teamdata['members'])
+                        team.members = False  # Lastuser no longer supports Members team
                         self.db.session.add(team)
                     else:
                         # Check if title has changed. The others will never change
