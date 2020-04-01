@@ -265,7 +265,10 @@ class UserManagerBase(object):
                             config['cache'].set(cache_key, sessiondata, timeout=300)
                             if fresh_data:
                                 signal_user_session_refreshed.send(user)
-                        else:
+                        elif not current_app.config.get('LASTUSER_SHARED_DOMAIN'):
+                            # If Lastuser doesn't know about this session, logout the
+                            # user, but only if config says we're not sharing the domain
+                            # with Lastuser. We could just be missing a valid token.
                             config['cache'].delete(cache_key)
                             user = None
                             if fresh_data:
