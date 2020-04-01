@@ -138,7 +138,7 @@ class UserManagerBase(object):
     def load_user_userinfo(self, userinfo, access_token, update=False):
         raise NotImplementedError("Not implemented in the base class")
 
-    def token_auth(self, resource='*', header_only=False):
+    def token_auth(self, resource='*'):
         if 'Authorization' in request.headers:
             token_match = auth_bearer_re.search(request.headers['Authorization'])
             if token_match:
@@ -148,13 +148,6 @@ class UserManagerBase(object):
                 raise LastuserTokenAuthException(
                     "A Bearer token is required in the Authorization header."
                 )
-            if 'access_token' in request.values:
-                raise LastuserTokenAuthException(
-                    "Access token specified in both header and body."
-                )
-        elif not header_only:
-            # Is there an access token in the form or query?
-            token = request.values.get('access_token')
         else:
             return
 
@@ -223,7 +216,7 @@ class UserManagerBase(object):
 
         # Look for a valid auth token that maps to a user
         try:
-            user = self.token_auth(header_only=True)
+            user = self.token_auth()
         except LastuserTokenAuthException as e:
             token_error = e
             user = None
