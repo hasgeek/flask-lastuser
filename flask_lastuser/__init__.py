@@ -1050,7 +1050,7 @@ class Lastuser(object):
         _raw=False,
         _token=None,
         _token_type=None,
-        **kw,
+        **kw
     ):
         """
         Call an external resource.

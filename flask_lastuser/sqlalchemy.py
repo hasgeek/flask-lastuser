@@ -991,7 +991,7 @@ def make_user_team_table(base, timezone=False):
                     Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
                     Column('team_id', Integer, ForeignKey('team.id'), primary_key=True),
                 )
-            ),
+            )
         )
 
 
