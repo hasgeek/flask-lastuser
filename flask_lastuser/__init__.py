@@ -398,10 +398,10 @@ class Lastuser(object):
 
         app.lastuser_config['lastuser_server'] = app.config['LASTUSER_SERVER']
         app.lastuser_config['auth_endpoint'] = app.config.get(
-            'LASTUSER_ENDPOINT_AUTH', 'auth'
+            'LASTUSER_ENDPOINT_AUTH', 'api/1/auth'
         )
         app.lastuser_config['token_endpoint'] = app.config.get(
-            'LASTUSER_ENDPOINT_TOKEN', 'token'
+            'LASTUSER_ENDPOINT_TOKEN', 'api/1/token'
         )
         app.lastuser_config['logout_endpoint'] = app.config.get(
             'LASTUSER_ENDPOINT_LOGOUT', 'logout'
