@@ -943,6 +943,18 @@ class Lastuser(object):
         """
         return urljoin(current_app.lastuser_config['lastuser_server'], endpoint)
 
+    @property
+    def autocomplete_endpoint(self):
+        return self.endpoint_url(
+            current_app.lastuser_config['getuser_autocomplete_endpoint']
+        )
+
+    @property
+    def getuser_endpoint(self):
+        return self.endpoint_url(
+            current_app.lastuser_config['getuser_userids_endpoint']
+        )
+
     def _lastuser_api_call(self, endpoint, method='POST', **kwargs):
         config = current_app.lastuser_config
         r = {'GET': requests.get, 'POST': requests.post}[method](
