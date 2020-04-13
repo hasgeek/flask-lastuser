@@ -263,7 +263,7 @@ class UserBase(BaseMixin):
     @property
     def profile_url(self):
         """URL to the user's profile. Can be overidden by subclasses"""
-        return urljoin(current_app.config['LASTUSER_SERVER'], 'profile')
+        return urljoin(current_app.config['LASTUSER_SERVER'], 'account')
 
     @property
     def profile_name(self):
