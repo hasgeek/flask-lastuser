@@ -199,10 +199,8 @@ class UserManagerBase(object):
         # Migrate data from Flask cookie session
         if 'lastuser_sessionid' in session:
             current_auth.cookie['sessionid'] = session.pop('lastuser_sessionid')
-            current_auth.cookie['updated_at'] = utcnow().isoformat()
         if 'lastuser_userid' in session:
             current_auth.cookie['userid'] = session.pop('lastuser_userid')
-            current_auth.cookie['updated_at'] = utcnow().isoformat()
 
         # If we have a Lastuser cookie, it overrides the user tokens in the session
         if 'lastuser' in request.cookies:
@@ -277,7 +275,6 @@ class UserManagerBase(object):
         if not user:
             current_auth.cookie.pop('userid', None)
             current_auth.cookie.pop('sessionid', None)
-            current_auth.cookie['updated_at'] = utcnow().isoformat()
 
         add_auth_attribute('user', user)
         g.user = user  # XXX: Deprecated, for backward compatibility only
@@ -290,7 +287,6 @@ class UserManagerBase(object):
                 if current_auth.cookie.get('userid') != user.userid:
                     # Merged account loaded. Switch over
                     current_auth.cookie['userid'] = user.userid
-                    current_auth.cookie['updated_at'] = utcnow().isoformat()
 
         # This will be set to True by the various login_required handlers downstream
         add_auth_attribute('login_required', False)
@@ -703,7 +699,6 @@ class Lastuser(object):
         # Discard currently logged in user
         current_auth.cookie.pop('sessionid', None)
         current_auth.cookie.pop('userid', None)
-        current_auth.cookie['updated_at'] = utcnow().isoformat()
         login_redirect_url = '%s?%s' % (
             urljoin(config['lastuser_server'], config['auth_endpoint']),
             urlencode(
@@ -745,7 +740,6 @@ class Lastuser(object):
             add_auth_attribute('lastuserinfo', None)
             current_auth.cookie.pop('sessionid', None)
             current_auth.cookie.pop('userid', None)
-            current_auth.cookie['updated_at'] = utcnow().isoformat()
             if not (next_url.startswith('http:') or next_url.startswith('https:')):
                 next_url = urljoin(request.url_root, next_url)
             config = current_app.lastuser_config
@@ -842,7 +836,6 @@ class Lastuser(object):
                 # while the rest of userinfo is longterm
                 current_auth.cookie['sessionid'] = userinfo.pop('sessionid')
             current_auth.cookie['userid'] = userinfo['userid']
-            current_auth.cookie['updated_at'] = utcnow().isoformat()
             # Step 4.4: Connect to a user manager if there is one
             if self.usermanager:
                 self.usermanager.login_listener(userinfo, token)
@@ -888,7 +881,6 @@ class Lastuser(object):
         if 'sessionid' in userinfo and config['use_sessions']:
             current_auth.cookie['sessionid'] = userinfo.pop('sessionid')
         current_auth.cookie['userid'] = userinfo['userid']
-        current_auth.cookie['updated_at'] = utcnow().isoformat()
         if self.usermanager:
             return self.usermanager.login_listener(userinfo, token)
 
