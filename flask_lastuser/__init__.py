@@ -475,6 +475,11 @@ class Lastuser(object):
         app.before_request(self.before_request)
         app.after_request(self.after_request)
 
+    @property
+    def login_beacon_iframe_endpoint(self):
+        # Legacy property used in Baseframe
+        return current_app.lastuser_config['login_beacon_iframe_endpoint']
+
     def init_usermanager(self, um):
         self.usermanager = um
         um.lastuser = weakref.proxy(self)
