@@ -49,7 +49,7 @@ class TestMergeUserData(unittest.TestCase):
             userinfo={
                 'timezone': 'Asia/Kolkata',
                 'organizations': {
-                    'member': [
+                    'admin': [
                         {
                             'userid': 'qazwsxedcrfvtgbyhnujmi',
                             'name': 'org1',
@@ -74,7 +74,7 @@ class TestMergeUserData(unittest.TestCase):
             userinfo={
                 'timezone': 'Asia/Kolkata',
                 'organizations': {
-                    'member': [
+                    'admin': [
                         {
                             'userid': 'qwertyuiopasdfghjklzxc',
                             'name': 'org2',
@@ -109,7 +109,7 @@ class TestMergeUserData(unittest.TestCase):
             userinfo={
                 'timezone': 'Asia/Kolkata',
                 'organizations': {
-                    'member': [
+                    'admin': [
                         {
                             'userid': 'mnbvcxzlkjhgfdsapoiuyt',
                             'name': 'org3',

@@ -212,34 +212,34 @@ class UserBase(BaseMixin):
         """Userids of the user and all the organizations owned by this user"""
         return [self.userid] + self.organizations_owned_ids()
 
-    def organizations_memberof(self):
-        """Organizations that this user is a member of"""
+    def organizations_adminof(self):
+        """Organizations that this user is an admin of"""
         if (
             self.userinfo
             and self.userinfo.get('organizations')
-            and 'member' in self.userinfo['organizations']
+            and 'admin' in self.userinfo['organizations']
         ):
-            return list(self.userinfo['organizations']['member'])
+            return list(self.userinfo['organizations']['admin'])
         else:
             return []
 
-    def organizations_memberof_ids(self):
-        """Userids of the organizations this user is a member of"""
-        return [org['userid'] for org in self.organizations_memberof()]
+    def organizations_adminof_ids(self):
+        """Userids of the organizations this user is an admin of"""
+        return [org['userid'] for org in self.organizations_adminof()]
 
-    def user_organization_memberof_ids(self):
-        """Userids of the user and all the organizations the user is a member of"""
-        return [self.userid] + self.organizations_memberof_ids()
+    def user_organizations_adminof_ids(self):
+        """Userids of the user and all the organizations the user is an admin of"""
+        return [self.userid] + self.organizations_adminof_ids()
 
     def owner_of(self, userid):
         if not isinstance(userid, six.string_types):
             userid = userid.userid
         return userid in self.user_organizations_owned_ids()
 
-    def member_of(self, userid):
+    def admin_of(self, userid):
         if not isinstance(userid, six.string_types):
             userid = userid.userid
-        return userid in self.user_organizations_memberof_ids()
+        return userid in self.user_organizations_adminof_ids()
 
     def team_info(self):
         return self.userinfo.get('teams')
@@ -366,8 +366,12 @@ class UserBase(BaseMixin):
 
         return result
 
-    # NOTE: Compatibility definition, please do not use in new code
-    user_organization_owned_ids = user_organizations_owned_ids
+    # Compatibility names. Do not use in new code.
+    organizations_memberof = organizations_adminof
+    organizations_memberof_ids = organizations_adminof_ids
+    user_organizations_memberof_ids = user_organizations_adminof_ids
+    user_organization_memberof_ids = user_organizations_adminof_ids
+    member_of = admin_of
 
 
 def _do_merge_into(instance, other, helper_method=None):
@@ -713,6 +717,14 @@ class ProfileMixin(object):
             self.userid == user.userid or self.userid in user.organizations_owned_ids()
         )
 
+    def admin_is(self, user):
+        if not user:
+            return False
+        return (
+            self.userid == user.userid
+            or self.userid in user.organizations_adminof_ids()
+        )
+
     @property
     def pickername(self):
         if self.userid == self.name:
@@ -728,7 +740,7 @@ class ProfileMixin(object):
             perms = set()
         perms.add('view')
         if user and (
-            self.userid in user.user_organizations_owned_ids()
+            self.userid in user.user_organizations_adminof_ids()
             or self.userid in user.oldids
         ):
             perms.add('edit')
@@ -761,7 +773,7 @@ class ProfileMixin(object):
         :param bool make_org_profiles: Should organization profiles be created?
         """
         idsnames = {user.userid: {'name': user.profile_name, 'title': user.fullname}}
-        for org in user.organizations_memberof():
+        for org in user.organizations_adminof():
             idsnames[org['userid']] = {'name': org['name'], 'title': org['title']}
         namesids = {value['name']: key for key, value in idsnames.items()}
 
@@ -813,7 +825,7 @@ class ProfileMixin(object):
                 session.add(profile)
 
         if make_org_profiles:
-            for org in user.organizations_memberof():
+            for org in user.organizations_adminof():
                 if org['userid'] not in profiles:
                     if parent is not None:
                         profile = cls(
