@@ -15,4 +15,4 @@ Flask-Lastuser
    :alt: Coverage status
    :target: https://coveralls.io/r/hasgeek/flask-lastuser
 
-Flask extension for Lastuser
+Flask extension for Lastuser, the auth module of hasgeek.com
