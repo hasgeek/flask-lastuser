@@ -36,6 +36,7 @@ import itsdangerous
 
 import requests
 
+from coaster.app import KeyRotationWrapper
 from coaster.auth import add_auth_attribute, current_auth, request_has_auth
 from coaster.utils import getbool, is_collection, utcnow
 from coaster.views import get_current_url, get_next_url
@@ -205,7 +206,10 @@ class UserManagerBase(object):
         # If we have a Lastuser cookie, it overrides the user tokens in the session
         if 'lastuser' in request.cookies:
             try:
-                lastuser_cookie, lastuser_cookie_headers = config['serializer'].loads(
+                (
+                    lastuser_cookie,
+                    lastuser_cookie_headers,
+                ) = self.lastuser.cookie_serializer().loads(
                     request.cookies['lastuser'], return_header=True
                 )
             except itsdangerous.BadSignature:
@@ -436,11 +440,6 @@ class Lastuser(object):
             'LASTUSER_USE_SESSIONS', True
         )
 
-        # Setup cookie serializer
-        app.lastuser_config['serializer'] = itsdangerous.JSONWebSignatureSerializer(
-            app.config.get('LASTUSER_SECRET_KEY') or app.config['SECRET_KEY']
-        )
-
         # Register known external resources provided by Lastuser itself
         with app.app_context():  # Required by `self.endpoint_url`
             self.external_resource(app, 'id', self.endpoint_url('api/1/id'), 'GET')
@@ -474,6 +473,18 @@ class Lastuser(object):
 
         app.before_request(self.before_request)
         app.after_request(self.after_request)
+
+    def cookie_serializer(self):
+        # Create a cookie serializer for one-time use
+        if 'LASTUSER_SECRET_KEYS' in current_app.config:
+            secret_keys = current_app.config['LASTUSER_SECRET_KEYS']
+        elif 'LASTUSER_SECRET_KEY' in current_app.config:
+            secret_keys = [current_app.config['LASTUSER_SECRET_KEY']]
+        elif 'SECRET_KEYS' in current_app.config:
+            secret_keys = current_app.config['SECRET_KEYS']
+        else:
+            secret_keys = [current_app.config['SECRET_KEY']]
+        return KeyRotationWrapper(itsdangerous.JSONWebSignatureSerializer, secret_keys)
 
     @property
     def login_beacon_iframe_endpoint(self):
@@ -521,7 +532,7 @@ class Lastuser(object):
                 expires = utcnow() + timedelta(days=365)
                 response.set_cookie(
                     'lastuser',
-                    value=current_app.lastuser_config['serializer'].dumps(
+                    value=self.cookie_serializer().dumps(
                         current_auth.cookie, header_fields={'v': 1}
                     ),
                     # Keep this cookie for a year.
