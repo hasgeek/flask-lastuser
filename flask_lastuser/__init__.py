@@ -440,6 +440,22 @@ class Lastuser(object):
             'LASTUSER_USE_SESSIONS', True
         )
 
+        if 'LASTUSER_SECRET_KEYS' not in app.config:
+            app.logger.warning("LASTUSER_SECRET_KEYS not found in config")
+            if 'LASTUSER_SECRET_KEY' in app.config:
+                app.logger.warning("Upgrading LASTUSER_SECRET_KEY into a list")
+                app.config['LASTUSER_SECRET_KEYS'] = [app.config['LASTUSER_SECRET_KEY']]
+            elif 'SECRET_KEYS' in app.config:
+                app.logger.warning("Using SECRET_KEYS instead")
+                app.config['LASTUSER_SECRET_KEYS'] = app.config['SECRET_KEYS']
+            elif app.config['SECRET_KEY']:
+                app.logger.warning("Using SECRET_KEY instead")
+                app.config['LASTUSER_SECRET_KEYS'] = [app.config['SECRET_KEY']]
+            else:
+                raise ValueError(
+                    "LASTUSER_SECRET_KEYS is not in config and no substitute was found"
+                )
+
         # Register known external resources provided by Lastuser itself
         with app.app_context():  # Required by `self.endpoint_url`
             self.external_resource(app, 'id', self.endpoint_url('api/1/id'), 'GET')
@@ -476,15 +492,10 @@ class Lastuser(object):
 
     def cookie_serializer(self):
         # Create a cookie serializer for one-time use
-        if 'LASTUSER_SECRET_KEYS' in current_app.config:
-            secret_keys = current_app.config['LASTUSER_SECRET_KEYS']
-        elif 'LASTUSER_SECRET_KEY' in current_app.config:
-            secret_keys = [current_app.config['LASTUSER_SECRET_KEY']]
-        elif 'SECRET_KEYS' in current_app.config:
-            secret_keys = current_app.config['SECRET_KEYS']
-        else:
-            secret_keys = [current_app.config['SECRET_KEY']]
-        return KeyRotationWrapper(itsdangerous.JSONWebSignatureSerializer, secret_keys)
+        return KeyRotationWrapper(
+            itsdangerous.JSONWebSignatureSerializer,
+            current_app.config['LASTUSER_SECRET_KEYS'],
+        )
 
     @property
     def login_beacon_iframe_endpoint(self):
