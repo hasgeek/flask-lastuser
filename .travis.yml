@@ -7,6 +7,7 @@ python:
 install:
   - python setup.py install
   - pip install -r test_requirements.txt
+  - pip install six --upgrade --ignore-installed
 # command to run tests
 script:
   - ./runtests.sh
