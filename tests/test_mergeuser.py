@@ -27,6 +27,7 @@ class TestMergeUserData(unittest.TestCase):
         self.app.config['LASTUSER_SERVER'] = 'http://lastuser.testing'
         self.app.config['LASTUSER_CLIENT_ID'] = 'client_id'
         self.app.config['LASTUSER_CLIENT_SECRET'] = 'client_secret'
+        self.app.config['LASTUSER_SECRET_KEYS'] = ['random_key']
 
         self.lastuser = Lastuser(self.app)
         self.lastuser.init_usermanager(UserManager(db, User, Team))
