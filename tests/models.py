@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
-
-from flask_lastuser.sqlalchemy import ProfileBase, TeamBase, UserBase2
-
 from coaster.db import db
+from flask_lastuser.sqlalchemy import ProfileBase, TeamBase, UserBase2
 
 
 class User(UserBase2, db.Model):

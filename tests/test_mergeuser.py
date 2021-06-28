@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
-
-from __future__ import unicode_literals
-
 import unittest
 
 from flask import Flask, current_app, json
 
-from flask_lastuser import Lastuser
-from flask_lastuser.sqlalchemy import UserManager
 from mocket import mocketize
 from mocket.mockhttp import Entry
 from models import Profile, Team, User, db
+
+from flask_lastuser import Lastuser
+from flask_lastuser.sqlalchemy import UserManager
 
 # -- Tests --------------------------------------------------------------------
 
@@ -198,7 +195,7 @@ class TestWithoutMerge(TestMergeUserData):
 
 class TestUserMerge(TestMergeUserData):
     def setUp(self):
-        super(TestUserMerge, self).setUp()
+        super().setUp()
         user1 = User.query.filter_by(username='user1').one()
         user2 = User.query.filter_by(username='user2').one()
         user2.merge_into(user1)
@@ -218,7 +215,7 @@ class TestUserMerge(TestMergeUserData):
         self.team3 = Team.query.filter_by(userid="1324354657687980132435").one()
 
     def tearDown(self):
-        super(TestUserMerge, self).tearDown()
+        super().tearDown()
 
     def test_merge_removes_username(self):
         self.assertEqual(self.user1.username, 'user1')

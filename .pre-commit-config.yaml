@@ -16,7 +16,6 @@ repos:
     rev: 21.6b0
     hooks:
       - id: black
-        language_version: python2.7
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v2.2.3
     hooks:
@@ -31,13 +30,13 @@ repos:
       - id: check-merge-conflict
       - id: check-xml
       - id: fix-encoding-pragma
+        args: ['--remove']
       - id: flake8
         additional_dependencies:
           - toml
           - flake8-assertive
           - flake8-blind-except
           - flake8-builtins
-          - flake8-coding
           - flake8-comprehensions
           - flake8-isort
           - flake8-logging-format

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # flake8: noqa
 #
 # flask-lastuser documentation build configuration file, created by
@@ -11,8 +10,6 @@
 #
 # All configuration values have a default; values that are commented out
 # serve to show the default.
-
-from __future__ import unicode_literals
 
 import os
 import sys

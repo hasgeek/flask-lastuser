@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import os
 import re
 
@@ -24,7 +23,6 @@ requires = [
     'Flask-Babelhg',
     'Flask>=1.0',
     'requests',
-    'six',
 ]
 
 setup(
