@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 flask_lastuser
 ~~~~~~~~~~~~~~
@@ -6,12 +5,10 @@ flask_lastuser
 Lastuser extension for Flask
 """
 
-from six.moves.urllib.parse import quote, urlencode, urljoin, urlsplit
-import six
-
 from collections import OrderedDict
 from datetime import timedelta
 from functools import wraps
+from urllib.parse import quote, urlencode, urljoin, urlsplit
 import re
 import uuid
 import weakref

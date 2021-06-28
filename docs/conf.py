@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # flake8: noqa
 #
 # flask-lastuser documentation build configuration file, created by

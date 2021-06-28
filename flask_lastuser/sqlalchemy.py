@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 flask_lastuser.sqlalchemy
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -6,9 +5,8 @@ flask_lastuser.sqlalchemy
 SQLAlchemy extensions for Flask-Lastuser.
 """
 
-from six.moves.urllib.parse import urljoin
-
 from collections import defaultdict
+from urllib.parse import urljoin
 
 from sqlalchemy import (
     Boolean,
