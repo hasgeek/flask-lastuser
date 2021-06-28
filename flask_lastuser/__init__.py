@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 flask_lastuser
 ~~~~~~~~~~~~~~
@@ -6,7 +5,6 @@ flask_lastuser
 Lastuser extension for Flask
 """
 
-from __future__ import absolute_import, unicode_literals
 from six.moves.urllib.parse import quote, urlencode, urljoin, urlsplit
 import six
 
@@ -87,14 +85,14 @@ class LastuserTokenAuthException(LastuserException):
 
 def randomstring():
     """Returns a random UUID for use as a state token for CSRF protection"""
-    return six.text_type(uuid.uuid4())
+    return str(uuid.uuid4())
 
 
 def resource_auth_error(message):
     return Response(message, 401, {'WWW-Authenticate': 'Bearer realm="Token Required"'})
 
 
-class UserInfo(object):
+class UserInfo:
     """
     User info object that is inserted into the context variable container (flask.g)
     """
@@ -122,7 +120,7 @@ class UserInfo(object):
         self.organizations = organizations
 
 
-class UserManagerBase(object):
+class UserManagerBase:
     """
     Base class for database-aware user managers.
     """
@@ -156,7 +154,7 @@ class UserManagerBase(object):
             return
 
         if resource == '*':
-            cache_key = 'lastuser/tokenverify/{token}'.format(token=token)
+            cache_key = f'lastuser/tokenverify/{token}'
         else:
             cache_key = 'lastuser/tokenverify/{token}/{resource}'.format(
                 token=token, resource=resource
@@ -241,14 +239,9 @@ class UserManagerBase(object):
                             current_auth.cookie['userid']
                         )
                     if user:
-                        if six.PY3:
-                            cache_key = (
-                                'lastuser/session/' + current_auth.cookie['sessionid']
-                            )
-                        else:
-                            cache_key = (
-                                'lastuser/session/' + current_auth.cookie['sessionid']
-                            ).encode('utf-8')
+                        cache_key = (
+                            'lastuser/session/' + current_auth.cookie['sessionid']
+                        )
                         sessiondata = config['cache'].get(cache_key)
                         fresh_data = False
                         if not sessiondata:
@@ -297,7 +290,7 @@ class UserManagerBase(object):
         signal_user_looked_up.send(current_auth.user)
 
         if token_error is not None:
-            return resource_auth_error(six.text_type(token_error))
+            return resource_auth_error(str(token_error))
 
     def login_listener(self, userinfo, token):
         """
@@ -344,7 +337,7 @@ class UserManagerBase(object):
             return []
 
 
-class Lastuser(object):
+class Lastuser:
     """
     Flask extension for Lastuser
     """
@@ -539,24 +532,23 @@ class Lastuser(object):
         # This prevents sending a cookie during an API call with no incoming cookie
         # There won't be a current_auth.cookie if this is a 400 Bad Request
         if request_has_auth() and hasattr(current_auth, 'cookie'):
-            if 'lastuser' in request.cookies or current_auth.cookie:
-                expires = utcnow() + timedelta(days=365)
-                response.set_cookie(
-                    'lastuser',
-                    value=self.cookie_serializer().dumps(
-                        current_auth.cookie, header_fields={'v': 1}
-                    ),
-                    # Keep this cookie for a year.
-                    max_age=31557600,
-                    # Expire one year from now.
-                    expires=expires,
-                    # Place cookie in master domain.
-                    domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),
-                    # HTTPS cookie if session is too.
-                    secure=current_app.config['SESSION_COOKIE_SECURE'],
-                    # Don't allow reading this from JS.
-                    httponly=True,
-                )
+            expires = utcnow() + timedelta(days=365)
+            response.set_cookie(
+                'lastuser',
+                value=self.cookie_serializer().dumps(
+                    current_auth.cookie, header_fields={'v': 1}
+                ),
+                # Keep this cookie for a year.
+                max_age=31557600,
+                # Expire one year from now.
+                expires=expires,
+                # Place cookie in master domain.
+                domain=current_app.config.get('LASTUSER_COOKIE_DOMAIN'),
+                # HTTPS cookie if session is too.
+                secure=current_app.config['SESSION_COOKIE_SECURE'],
+                # Don't allow reading this from JS.
+                httponly=True,
+            )
         return response
 
     def requires_login(self, f):
@@ -706,7 +698,7 @@ class Lastuser(object):
 
             scope = data.get('scope', 'id')
             message = data.get('message') or request.args.get('message')
-            if isinstance(message, six.text_type):
+            if isinstance(message, str):
                 message = message.encode('utf-8')
             return self._login_handler_internal(scope, next_url, message, metarefresh)
 
@@ -726,7 +718,7 @@ class Lastuser(object):
         # Discard currently logged in user
         current_auth.cookie.pop('sessionid', None)
         current_auth.cookie.pop('userid', None)
-        login_redirect_url = '%s?%s' % (
+        login_redirect_url = '{}?{}'.format(
             urljoin(config['lastuser_server'], config['auth_endpoint']),
             urlencode(
                 [
@@ -1081,7 +1073,7 @@ class Lastuser(object):
         _raw=False,
         _token=None,
         _token_type=None,
-        **kw
+        **kw,
     ):
         """
         Call an external resource.

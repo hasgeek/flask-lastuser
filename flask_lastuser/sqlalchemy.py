@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 flask_lastuser.sqlalchemy
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -6,7 +5,6 @@ flask_lastuser.sqlalchemy
 SQLAlchemy extensions for Flask-Lastuser.
 """
 
-from __future__ import absolute_import, unicode_literals
 from six.moves.urllib.parse import urljoin
 import six
 
@@ -186,7 +184,7 @@ class UserBase(BaseMixin):
         return self.userinfo and self.userinfo.get('avatar')
 
     def __repr__(self):
-        return '<User %s (%s) "%s">' % (self.userid, self.username, self.fullname)
+        return f'<User {self.userid} ({self.username}) "{self.fullname}">'
 
     def merge_accounts(self):
         """
@@ -232,12 +230,12 @@ class UserBase(BaseMixin):
         return [self.userid] + self.organizations_adminof_ids()
 
     def owner_of(self, userid):
-        if not isinstance(userid, six.string_types):
+        if not isinstance(userid, str):
             userid = userid.userid
         return userid in self.user_organizations_owned_ids()
 
     def admin_of(self, userid):
-        if not isinstance(userid, six.string_types):
+        if not isinstance(userid, str):
             userid = userid.userid
         return userid in self.user_organizations_adminof_ids()
 
@@ -253,7 +251,7 @@ class UserBase(BaseMixin):
         ]
 
     def teammember_of(self, userid):
-        if not isinstance(userid, six.string_types):
+        if not isinstance(userid, str):
             userid = userid.userid
         return userid in self.team_ids()
 
@@ -493,7 +491,7 @@ def _do_merge_into(instance, other, helper_method=None):
     return safe_to_remove_instance
 
 
-class StatusMixin(object):
+class StatusMixin:
     """
     Mixin class providing the status column and helper methods.
     """
@@ -539,7 +537,7 @@ class UserMergeMixin(StatusMixin):
         :param str username: Username to lookup
         :param str userid: Userid to lookup
         """
-        user = super(UserMergeMixin, cls).get(
+        user = super().get(
             username=username, userid=userid, defercols=defercols
         )
 
@@ -685,7 +683,7 @@ class TeamBase(TeamMixin):
     __tablename__ = 'team'
 
 
-class TeamMembersMixin(object):
+class TeamMembersMixin:
     @declared_attr
     def members(cls):
         return Column(Boolean, nullable=False, default=False)
@@ -695,7 +693,7 @@ class TeamBase2(TeamMixin, TeamMembersMixin):
     __tablename__ = 'team'
 
 
-class ProfileMixin(object):
+class ProfileMixin:
     """
     ProfileMixin provides methods to assist with creating Profile models (which represent
     both User and Organization models), and keeping them updated as user data changes.
@@ -730,10 +728,10 @@ class ProfileMixin(object):
         if self.userid == self.name:
             return self.title
         else:
-            return '{title} (@{name})'.format(title=self.title, name=self.name)
+            return f'{self.title} (@{self.name})'
 
     def permissions(self, user, inherited=None):
-        parent = super(ProfileMixin, self)
+        parent = super()
         if hasattr(parent, 'permissions'):
             perms = parent.permissions(user, inherited)
         else:
@@ -987,7 +985,7 @@ class ProfileBase(ProfileMixin2, BaseNameMixin):
         return synonym('userid')
 
     def __repr__(self):
-        return '<%s %s "%s">' % (self.__class__.__name__, self.name, self.title)
+        return f'<{self.__class__.__name__} {self.name} "{self.title}">'
 
 
 def make_user_team_table(base, timezone=False):
@@ -1003,7 +1001,7 @@ def make_user_team_table(base, timezone=False):
                     Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
                     Column('team_id', Integer, ForeignKey('team.id'), primary_key=True),
                 )
-            )
+            ),
         )
 
 
