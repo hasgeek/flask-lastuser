@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 flask_lastuser.sqlalchemy
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -6,7 +7,6 @@ SQLAlchemy extensions for Flask-Lastuser.
 """
 
 from six.moves.urllib.parse import urljoin
-import six
 
 from collections import defaultdict
 
@@ -537,9 +537,7 @@ class UserMergeMixin(StatusMixin):
         :param str username: Username to lookup
         :param str userid: Userid to lookup
         """
-        user = super().get(
-            username=username, userid=userid, defercols=defercols
-        )
+        user = super().get(username=username, userid=userid, defercols=defercols)
 
         if user and user.status == USER_STATUS.MERGED:
             user = user.merged_user()
