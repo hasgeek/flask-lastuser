@@ -7,7 +7,7 @@ repos:
       - id: autoflake
         args: ['--in-place', '--remove-all-unused-imports', '--ignore-init-module-imports', '--remove-unused-variable']
   - repo: https://github.com/PyCQA/isort
-    rev: 5.9.1
+    rev: 5.9.2
     hooks:
       - id: isort
         additional_dependencies:
