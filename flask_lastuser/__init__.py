@@ -57,27 +57,31 @@ __ = flask_lastuser_translations.lazy_gettext
 auth_bearer_re = re.compile("^Bearer ([a-zA-Z0-9_.~+/-]+=*)$")
 
 
-class LastuserConfigException(Exception):
+class LastuserConfigError(Exception):
     pass
 
 
-class LastuserException(Exception):
+class LastuserError(Exception):
     pass
 
 
-class LastuserApiException(LastuserException):
+class LastuserApiError(LastuserError):
     pass
 
 
-class LastuserResourceException(LastuserException):
+class LastuserResourceError(LastuserError):
     pass
 
 
-class LastuserResourceConnectionException(LastuserResourceException):
+# Legacy name
+LastuserResourceException = LastuserResourceError
+
+
+class LastuserResourceConnectionError(LastuserResourceError):
     pass
 
 
-class LastuserTokenAuthException(LastuserException):
+class LastuserTokenAuthError(LastuserError):
     pass
 
 
@@ -142,7 +146,7 @@ class UserManagerBase:
                 token = token_match.group(1)
             else:
                 # Unrecognized Authorization header
-                raise LastuserTokenAuthException(
+                raise LastuserTokenAuthError(
                     "A Bearer token is required in the Authorization header."
                 )
         else:
@@ -170,7 +174,7 @@ class UserManagerBase:
         if config['cache']:
             config['cache'].set(cache_key, result, timeout=300)
         if result['status'] == 'error' or 'userinfo' not in result:
-            raise LastuserTokenAuthException("Invalid token.")
+            raise LastuserTokenAuthError("Invalid token.")
         elif result['status'] == 'ok':
             # All okay.
             # If the user is unknown, make a new user. If the user is known, don't update scoped data
@@ -215,7 +219,7 @@ class UserManagerBase:
         # Look for a valid auth token that maps to a user
         try:
             user = self.token_auth()
-        except LastuserTokenAuthException as e:
+        except LastuserTokenAuthError as e:
             token_error = e
             user = None
         if user:
@@ -707,7 +711,7 @@ class Lastuser:
         self, scope, next, message=None, metarefresh=False  # NOQA: A002
     ):
         if not self._redirect_uri_name:
-            raise LastuserConfigException("No authorization handler defined")
+            raise LastuserConfigError("No authorization handler defined")
         config = current_app.lastuser_config
         session['lastuser_state'] = randomstring()
         session['lastuser_redirect_uri'] = url_for(
@@ -790,7 +794,7 @@ class Lastuser:
             # Step 1: Validations
             # Validation 1: Check if there is an error handler
             if not self._auth_error_handler:
-                raise LastuserConfigException("No authorization error handler")
+                raise LastuserConfigError("No authorization error handler")
             # Validation 2: Check for CSRF attacks
             state = request.args.get('state')
             if state is None or state != session.get('lastuser_state'):
@@ -973,13 +977,11 @@ class Lastuser:
             headers={'Accept': 'application/json'},
         )
         if r.status_code in (400, 500, 401):
-            raise LastuserApiException(
-                "Call to %s returned %d" % (endpoint, r.status_code)
-            )
+            raise LastuserApiError("Call to %s returned %d" % (endpoint, r.status_code))
         elif r.status_code in (200, 201, 202, 203):
             return r.json()
         else:
-            raise LastuserApiException(
+            raise LastuserApiError(
                 "Call to %s returned unknown status %d and response %s "
                 % (endpoint, r.status_code, r.text)
             )
@@ -1056,7 +1058,7 @@ class Lastuser:
         Register an external resource.
         """
         if method not in ['GET', 'PUT', 'POST', 'DELETE']:
-            raise LastuserException("Unknown HTTP method '%s'" % method)
+            raise LastuserError("Unknown HTTP method '%s'" % method)
         app.lastuser_config['external_resources'][name] = {
             'endpoint': endpoint,
             'method': method,
@@ -1083,14 +1085,14 @@ class Lastuser:
                 not hasattr(current_auth, 'lastuserinfo')
                 or not current_auth.lastuserinfo
             ):
-                raise LastuserResourceException("No access token available")
+                raise LastuserResourceError("No access token available")
             _token = current_auth.lastuserinfo.token
             _token_type = current_auth.lastuserinfo.token_type
 
         if _token_type is None:
-            raise LastuserResourceException("Token type not provided")
+            raise LastuserResourceError("Token type not provided")
         if _token_type != 'bearer':
-            raise LastuserResourceException("Unsupported token type")
+            raise LastuserResourceError("Unsupported token type")
 
         if headers is None:
             headers = {}
@@ -1113,15 +1115,13 @@ class Lastuser:
                     files=files,
                 )
         except requests.exceptions.RequestException as e:
-            raise LastuserResourceConnectionException(
+            raise LastuserResourceConnectionError(
                 "Could not connect to the server. Connection error: %s" % e
             )
         # Parse the result
         if r.status_code not in (200, 201, 202, 203):
             # XXX: What other status codes could we possibly get from a REST call?
-            raise LastuserResourceException(
-                "Resource returned status %d" % r.status_code
-            )
+            raise LastuserResourceError("Resource returned status %d" % r.status_code)
         if _raw:
             return r
         else:
@@ -1171,10 +1171,10 @@ class Lastuser:
 
             if result['status'] == 'ok':
                 return result['result']
-        except LastuserResourceConnectionException:
+        except LastuserResourceConnectionError:
             # Server not reachable? May be an interim error, so don't knock off the user already
             return {'active': True}
-        except LastuserResourceException:
+        except LastuserResourceError:
             pass
 
         return {'active': False}
