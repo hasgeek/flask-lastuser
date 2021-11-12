@@ -1183,6 +1183,32 @@ class Lastuser:
         """
         Update user details from Lastuser.
         """
+        if not user.lastuser_token:
+            # We don't have a token, so first we obtain one. This call only works if
+            # we are a trusted app.
+            config = current_app.lastuser_config
+            r = requests.post(
+                urljoin(config['lastuser_server'], config['token_endpoint']),
+                auth=(config['client_id'], config['client_secret']),
+                headers={'Accept': 'application/json'},
+                data={
+                    'userid': user.userid,
+                    'grant_type': 'client_credentials',
+                    'scope': self._login_handler().get('scope', ''),
+                },
+            )
+            result = r.json()
+
+            if 'error' in result:
+                # Lastuser doesn't like us. Maybe we're not a trusted app.
+                # Return without updating.
+                return
+
+            user.lastuser_token = result.get('access_token')
+            user.lastuser_token_type = result.get('token_type')
+            user.lastuser_token_scope = result.get('scope')
+            # Done, now continue using this new token
+
         result = self.call_resource(
             'id',
             all=1,
