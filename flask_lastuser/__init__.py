@@ -550,6 +550,11 @@ class Lastuser:
                 secure=current_app.config['SESSION_COOKIE_SECURE'],
                 # Don't allow reading this from JS.
                 httponly=True,
+                # Using SameSite=Strict will make the browser not send this cookie when
+                # the user arrives from an external site. This affects the main website,
+                # and since Flask-Lastuser is intended to support apps running in a
+                # sub-domain, it must use the same Lax policy as the main website.
+                samesite='Lax',
             )
         return response
 
