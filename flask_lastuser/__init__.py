@@ -27,7 +27,7 @@ from flask import (
     url_for,
 )
 from flask.signals import Namespace
-from flask_babelhg import Domain
+from flask_babel import Domain
 import itsdangerous
 
 import requests
