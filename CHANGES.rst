@@ -2,6 +2,7 @@
 -----
 
 * Code reformatted using Black
+* Switch to Flask-Babel
 
 0.4.0
 -----
