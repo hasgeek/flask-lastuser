@@ -51,11 +51,11 @@ __all__ = [
     'ProfileMixin2',
     'ProfileBase',
     'UserManager',
-    'IncompleteUserMigration',
+    'IncompleteUserMigrationError',
 ]
 
 
-class IncompleteUserMigration(Exception):
+class IncompleteUserMigrationError(Exception):
     """
     Could not migrate users because of data conflicts.
     """
@@ -134,7 +134,7 @@ class UserBase(BaseMixin):
         param, value = require_one_of(True, username=username, userid=userid)
         query = cls.query.filter_by(**{param: value})
         if not defercols:
-            query = query.options(undefer('userinfo'))
+            query = query.options(undefer(cls.userinfo))
         return query.one_or_none()
 
     @property
@@ -466,11 +466,11 @@ def _do_merge_into(instance, other, helper_method=None):
                     if isinstance(result, (list, tuple, set)):
                         migrated_tables.update(result)
                     migrated_tables.add(model.__table__.name)
-                except IncompleteUserMigration:
+                except IncompleteUserMigrationError:
                     safe_to_remove_instance = False
                     current_app.logger.debug(
-                        "_do_merge_into interrupted because IncompleteUserMigration "
-                        "raised by {model}",
+                        "_do_merge_into interrupted because"
+                        " IncompleteUserMigrationError raised by {model}",
                         extra={'model': model},
                     )
             else:
@@ -1030,7 +1030,7 @@ class UserManager(UserManagerBase):
         else:
             user = (
                 self.usermodel.query.filter_by(userid=userid)
-                .options(undefer('userinfo'))
+                .options(undefer(self.__class__.userinfo))
                 .one_or_none()
             )
         if user is None:
