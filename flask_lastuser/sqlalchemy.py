@@ -371,7 +371,6 @@ class UserBase(BaseMixin):
 
 
 def _do_merge_into(instance, other, helper_method=None):
-
     assert instance != other
 
     # User id column (for foreign keys)
