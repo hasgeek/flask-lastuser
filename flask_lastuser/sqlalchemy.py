@@ -725,16 +725,16 @@ class ProfileMixin:
         else:
             return f'{self.title} (@{self.name})'
 
-    def permissions(self, user, inherited=None):
+    def permissions(self, actor, inherited=None):
         parent = super()
         if hasattr(parent, 'permissions'):
-            perms = parent.permissions(user, inherited)
+            perms = parent.permissions(actor, inherited)
         else:
             perms = set()
         perms.add('view')
-        if user and (
-            self.userid in user.user_organizations_adminof_ids()
-            or self.userid in user.oldids
+        if actor and (
+            self.userid in actor.user_organizations_adminof_ids()
+            or self.userid in actor.oldids
         ):
             perms.add('edit')
             perms.add('delete')
