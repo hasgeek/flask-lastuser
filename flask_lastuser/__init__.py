@@ -29,7 +29,6 @@ from flask import (
 from flask.signals import Namespace
 from flask_babel import Domain
 import itsdangerous
-
 import requests
 
 from coaster.app import KeyRotationWrapper
@@ -488,7 +487,7 @@ class Lastuser:
     def cookie_serializer(self):
         # Create a cookie serializer for one-time use
         return KeyRotationWrapper(
-            itsdangerous.JSONWebSignatureSerializer,
+            itsdangerous.URLSafeTimedSerializer,
             current_app.config['LASTUSER_SECRET_KEYS'],
         )
 

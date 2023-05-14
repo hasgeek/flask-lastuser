@@ -1,7 +1,6 @@
 import unittest
 
 from flask import Flask, current_app, json
-
 from mocket import mocketize
 from mocket.mockhttp import Entry
 from models import Profile, Team, User, db
