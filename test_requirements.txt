@@ -1,5 +1,5 @@
-nose
 coverage
 coveralls
 Flask-SQLAlchemy
 mocket
+pytest

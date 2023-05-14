@@ -8,6 +8,8 @@ SQLAlchemy extensions for Flask-Lastuser.
 from collections import defaultdict
 from urllib.parse import urljoin
 
+from flask import current_app, g
+from pytz import timezone
 from sqlalchemy import (
     Boolean,
     Column,
@@ -21,12 +23,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import deferred, relationship, synonym, undefer
-
-from flask import current_app, g
+from sqlalchemy.orm import declarative_mixin, deferred, relationship, synonym, undefer
 from werkzeug.utils import cached_property
-
-from pytz import timezone
 
 from coaster.auth import add_auth_attribute, current_auth
 from coaster.sqlalchemy import (
@@ -71,6 +69,7 @@ class USER_STATUS(LabeledEnum):  # NOQA: N801
     )  # Deleted but record preserved for foreign key references
 
 
+@declarative_mixin
 class UserBase(BaseMixin):
     """
     Base class for user definition.
@@ -488,6 +487,7 @@ def _do_merge_into(instance, other, helper_method=None):
     return safe_to_remove_instance
 
 
+@declarative_mixin
 class StatusMixin:
     """
     Mixin class providing the status column and helper methods.
@@ -519,6 +519,7 @@ class StatusMixin:
         return self.status == USER_STATUS.MERGED
 
 
+@declarative_mixin
 class UserMergeMixin(StatusMixin):
     """
     Mixin class adding support for user status and merging. Don't use this mixin
@@ -594,6 +595,7 @@ class UserMergeMixin(StatusMixin):
         return safe_to_remove_user
 
 
+@declarative_mixin
 class UserBase2(UserMergeMixin, UserBase):
     """
     Version 2 of UserBase, adding support for user status and merging. Inherits from
@@ -601,6 +603,7 @@ class UserBase2(UserMergeMixin, UserBase):
     """
 
 
+@declarative_mixin
 class TeamMixin(BaseMixin):
     @declared_attr
     def userid(cls):
@@ -652,8 +655,9 @@ class TeamMixin(BaseMixin):
             .values(user_id=newuser.id)
         )
         session.execute(
-            users_teams.delete(users_teams.c.user_id == olduser.id).where(
-                users_teams.c.team_id.in_(remove_team_ids)
+            users_teams.delete().where(
+                users_teams.c.user_id == olduser.id,
+                users_teams.c.team_id.in_(remove_team_ids),
             )
         )
 
@@ -674,20 +678,24 @@ class TeamMixin(BaseMixin):
         pass  # TODO
 
 
+@declarative_mixin
 class TeamBase(TeamMixin):
     __tablename__ = 'team'
 
 
+@declarative_mixin
 class TeamMembersMixin:
     @declared_attr
     def members(cls):
         return Column(Boolean, nullable=False, default=False)
 
 
+@declarative_mixin
 class TeamBase2(TeamMixin, TeamMembersMixin):
     __tablename__ = 'team'
 
 
+@declarative_mixin
 class ProfileMixin:
     """
     ProfileMixin provides methods to assist with creating Profile models (which represent
@@ -859,6 +867,7 @@ class ProfileMixin:
         return safe_to_remove_profile
 
 
+@declarative_mixin
 class ProfileMixin2(StatusMixin, ProfileMixin):
     @classmethod
     def get(cls, name=None, userid=None, buid=None):
@@ -965,6 +974,7 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
             cls.query.session.flush()
 
 
+@declarative_mixin
 class ProfileBase(ProfileMixin2, BaseNameMixin):
     """
     Base class for profiles
@@ -1181,6 +1191,10 @@ class UserManager(UserManagerBase):
                         if user in team.users:
                             team.users.remove(user)
 
+        # Commit this so that token info is saved even if the user account is an existing account.
+        # This is called before the request is processed by the client app, so there should be no
+        # other data in the transaction
+        self.db.session.commit()
         # Commit this so that token info is saved even if the user account is an existing account.
         # This is called before the request is processed by the client app, so there should be no
         # other data in the transaction
