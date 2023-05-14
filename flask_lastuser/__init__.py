@@ -205,11 +205,8 @@ class UserManagerBase:
         # If we have a Lastuser cookie, it overrides the user tokens in the session
         if 'lastuser' in request.cookies:
             try:
-                (
-                    lastuser_cookie,
-                    lastuser_cookie_headers,
-                ) = self.lastuser.cookie_serializer().loads(
-                    request.cookies['lastuser'], return_header=True
+                lastuser_cookie = self.lastuser.cookie_serializer().loads(
+                    request.cookies['lastuser'], max_age=365 * 86400
                 )
             except itsdangerous.BadSignature:
                 lastuser_cookie = {}
@@ -536,9 +533,7 @@ class Lastuser:
             expires = utcnow() + timedelta(days=365)
             response.set_cookie(
                 'lastuser',
-                value=self.cookie_serializer().dumps(
-                    current_auth.cookie, header_fields={'v': 1}
-                ),
+                value=self.cookie_serializer().dumps(current_auth.cookie),
                 # Keep this cookie for a year.
                 max_age=31557600,
                 # Expire one year from now.
