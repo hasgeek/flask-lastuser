@@ -40,9 +40,13 @@ setup(
     platforms='any',
     install_requires=requires,
     classifiers=[
-        "Programming Language :: Python",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.7",
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
         'Intended Audience :: Developers',
@@ -53,6 +57,6 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     dependency_links=[
-        "https://github.com/hasgeek/coaster/archive/master.zip#egg=coaster-dev",
+        "https://github.com/hasgeek/coaster/archive/master.zip#egg=coaster",
     ],
 )
