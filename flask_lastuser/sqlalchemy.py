@@ -785,9 +785,11 @@ class ProfileMixin:
                 profile.name = make_name(
                     profile.userid,
                     maxlength=250,
-                    checkused=lambda c: True
-                    if session.query(cls.name).filter_by(name=c).first()
-                    else False,
+                    checkused=lambda c: (
+                        True
+                        if session.query(cls.name).filter_by(name=c).first()
+                        else False
+                    ),
                 )
 
         # Flush this to the db for constraint integrity
