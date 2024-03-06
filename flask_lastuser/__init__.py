@@ -138,57 +138,12 @@ class UserManagerBase:
     def load_user_userinfo(self, userinfo, access_token, update=False):
         raise NotImplementedError("Not implemented in the base class")
 
-    def token_auth(self, resource='*'):
-        if 'Authorization' in request.headers:
-            token_match = auth_bearer_re.search(request.headers['Authorization'])
-            if token_match:
-                token = token_match.group(1)
-            else:
-                # Unrecognized Authorization header
-                raise LastuserTokenAuthError(
-                    "A Bearer token is required in the Authorization header."
-                )
-        else:
-            return
-
-        if not token:
-            return
-
-        if resource == '*':
-            cache_key = f'lastuser/tokenverify/{token}'
-        else:
-            cache_key = 'lastuser/tokenverify/{token}/{resource}'.format(
-                token=token, resource=resource
-            )
-        result = None
-
-        config = current_app.lastuser_config
-
-        if config['cache']:
-            result = config['cache'].get(cache_key)
-        if result is None:
-            result = self.lastuser._lastuser_api_call(
-                config['tokenverify_endpoint'], resource=resource, access_token=token
-            )
-        if config['cache']:
-            config['cache'].set(cache_key, result, timeout=300)
-        if result['status'] == 'error' or 'userinfo' not in result:
-            raise LastuserTokenAuthError("Invalid token.")
-        elif result['status'] == 'ok':
-            # All okay.
-            # If the user is unknown, make a new user. If the user is known, don't update scoped data
-            user = self.load_user_userinfo(
-                result['userinfo'], access_token=None, update=False
-            )
-            return user
-
     def before_request(self):
         """
         Listener that is called at the start of each request. Responsible for
         setting current_auth.user and current_auth.lastuserinfo
         """
         user = None
-        token_error = None
         add_auth_attribute('lastuserinfo', None)
         user_from_token = False
 
@@ -212,60 +167,45 @@ class UserManagerBase:
                 lastuser_cookie = {}
             add_auth_attribute('cookie', lastuser_cookie)
 
-        # Look for a valid auth token that maps to a user
-        try:
-            user = self.token_auth()
-        except LastuserTokenAuthError as e:
-            token_error = e
-            user = None
-        if user:
-            user_from_token = True
-        else:
-            if config['cache'] and config['use_sessions']:
-                # If this app has a cache and sessions aren't explicitly disabled, use sessions
-                if (
-                    'sessionid' in current_auth.cookie
-                    and 'userid' in current_auth.cookie
-                ):
-                    # We have a sessionid and userid. Load user and verify the session
-                    user = self.load_user(current_auth.cookie['userid'])
-                    if not user:
-                        # Are we in a subdomain with a parent domain cookie, with a completely
-                        # new user? Try loading this user from Lastuser and obtaining an
-                        # access_token if we're a trusted client.
-                        user = self.lastuser.login_from_cookie(
-                            current_auth.cookie['userid']
-                        )
-                    if user:
-                        cache_key = (
-                            'lastuser/session/' + current_auth.cookie['sessionid']
-                        )
-                        sessiondata = config['cache'].get(cache_key)
-                        fresh_data = False
-                        if not sessiondata:
-                            sessiondata = self.lastuser.session_verify(
-                                current_auth.cookie['sessionid'], user
-                            )
-                            fresh_data = True
-                        if sessiondata.get('active'):
-                            config['cache'].set(cache_key, sessiondata, timeout=300)
-                            if fresh_data:
-                                signal_user_session_refreshed.send(user)
-                        elif not current_app.config.get('LASTUSER_SHARED_DOMAIN'):
-                            # If Lastuser doesn't know about this session, logout the
-                            # user, but only if config says we're not sharing the domain
-                            # with Lastuser. We could just be missing a valid token.
-                            config['cache'].delete(cache_key)
-                            user = None
-                            if fresh_data:
-                                signal_user_session_expired.send(user)
-            elif 'userid' in current_auth.cookie:
+        if config['cache'] and config['use_sessions']:
+            # If this app has a cache and sessions aren't explicitly disabled, use
+            # sessions
+            if 'sessionid' in current_auth.cookie and 'userid' in current_auth.cookie:
+                # We have a sessionid and userid. Load user and verify the session
                 user = self.load_user(current_auth.cookie['userid'])
                 if not user:
-                    # As above, try to create user record
+                    # Are we in a subdomain with a parent domain cookie, with a
+                    # completely new user? Try loading this user from Lastuser and
+                    # obtaining an access_token if we're a trusted client.
                     user = self.lastuser.login_from_cookie(
                         current_auth.cookie['userid']
                     )
+                if user:
+                    cache_key = 'lastuser/session/' + current_auth.cookie['sessionid']
+                    sessiondata = config['cache'].get(cache_key)
+                    fresh_data = False
+                    if not sessiondata:
+                        sessiondata = self.lastuser.session_verify(
+                            current_auth.cookie['sessionid'], user
+                        )
+                        fresh_data = True
+                    if sessiondata.get('active'):
+                        config['cache'].set(cache_key, sessiondata, timeout=300)
+                        if fresh_data:
+                            signal_user_session_refreshed.send(user)
+                    elif not current_app.config.get('LASTUSER_SHARED_DOMAIN'):
+                        # If Lastuser doesn't know about this session, logout the
+                        # user, but only if config says we're not sharing the domain
+                        # with Lastuser. We could just be missing a valid token.
+                        config['cache'].delete(cache_key)
+                        user = None
+                        if fresh_data:
+                            signal_user_session_expired.send(user)
+        elif 'userid' in current_auth.cookie:
+            user = self.load_user(current_auth.cookie['userid'])
+            if not user:
+                # As above, try to create user record
+                user = self.lastuser.login_from_cookie(current_auth.cookie['userid'])
 
         if not user:
             current_auth.cookie.pop('userid', None)
@@ -274,9 +214,8 @@ class UserManagerBase:
         add_auth_attribute('user', user)
         g.user = user  # XXX: Deprecated, for backward compatibility only
         if user:
-            add_auth_attribute(
-                'access_scope', ['*']
-            )  # TODO: In future, restrict to access token's scope
+            # TODO: In future, restrict to access token's scope
+            add_auth_attribute('access_scope', ['*'])
             add_auth_attribute('lastuserinfo', self.make_userinfo(user))
             if not user_from_token:
                 if current_auth.cookie.get('userid') != user.userid:
@@ -286,9 +225,6 @@ class UserManagerBase:
         # This will be set to True by the various login_required handlers downstream
         add_auth_attribute('login_required', False)
         signal_user_looked_up.send(current_auth.user)
-
-        if token_error is not None:
-            return resource_auth_error(str(token_error))
 
     def login_listener(self, userinfo, token):
         """
@@ -403,9 +339,6 @@ class Lastuser:
 
         app.lastuser_config['syncresources_endpoint'] = app.config.get(
             'LASTUSER_ENDPOINT_REGISTER_RESOURCE', 'api/1/resource/sync'
-        )
-        app.lastuser_config['tokenverify_endpoint'] = app.config.get(
-            'LASTUSER_ENDPOINT_TOKENVERIFY', 'api/1/token/verify'
         )
         app.lastuser_config['tokengetscope_endpoint'] = app.config.get(
             'LASTUSER_ENDPOINT_TOKENGETSCOPE', 'api/1/token/get_scope'
