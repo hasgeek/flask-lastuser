@@ -6,17 +6,12 @@ repos:
     hooks:
       - id: pyupgrade
         args: ['--keep-runtime-typing', '--py39-plus']
-  - repo: https://github.com/lucasmbrown/mirrors-autoflake
-    rev: v1.3
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.2
     hooks:
-      - id: autoflake
-        args:
-          [
-            "--in-place",
-            "--remove-all-unused-imports",
-            "--ignore-init-module-imports",
-            "--remove-unused-variable",
-          ]
+      - id: ruff
+        args: ['--fix', '--exit-non-zero-on-fix']
+        # Extra args, only after removing flake8 and yesqa: '--extend-select', 'RUF100'
   - repo: https://github.com/PyCQA/isort
     rev: 5.13.2
     hooks:
@@ -24,7 +19,7 @@ repos:
         additional_dependencies:
           - toml
   - repo: https://github.com/psf/black
-    rev: 24.4.0
+    rev: 24.4.2
     hooks:
       - id: black
   - repo: https://github.com/pre-commit/pre-commit-hooks
