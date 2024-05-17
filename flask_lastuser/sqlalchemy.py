@@ -1,9 +1,4 @@
-"""
-flask_lastuser.sqlalchemy
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-SQLAlchemy extensions for Flask-Lastuser.
-"""
+"""SQLAlchemy extensions for Flask-Lastuser."""
 
 from collections import defaultdict
 from urllib.parse import urljoin
@@ -54,9 +49,7 @@ __all__ = [
 
 
 class IncompleteUserMigrationError(Exception):
-    """
-    Could not migrate users because of data conflicts.
-    """
+    """Could not migrate users because of data conflicts."""
 
 
 class USER_STATUS(LabeledEnum):  # NOQA: N801
@@ -71,42 +64,47 @@ class USER_STATUS(LabeledEnum):  # NOQA: N801
 
 @declarative_mixin
 class UserBase(BaseMixin):
-    """
-    Base class for user definition.
-    """
+    """Base class for user definition."""
 
     __tablename__ = 'user'
 
     @declared_attr
+    @classmethod
     def userid(cls):
         return Column(String(22), unique=True, nullable=False)
 
     @declared_attr
+    @classmethod
     def username(cls):
         # Nullable since usernames are optional
         return Column(Unicode(80), unique=True, nullable=True)
 
     @declared_attr
+    @classmethod
     def fullname(cls):
         return Column(Unicode(80), default='', nullable=False)
 
     @declared_attr
+    @classmethod
     def email(cls):
         # Nullable since we may not get an email address (out of scope or user hasn't verified one)
         return Column(Unicode(80), unique=True, nullable=True)
 
     # Access token info
     @declared_attr
+    @classmethod
     def lastuser_token(cls):
         # Nullable for legacy reasons. Should not be now.
         return Column(String(22), nullable=True, unique=True)
 
     @declared_attr
+    @classmethod
     def lastuser_token_type(cls):
         # Nullable for legacy reasons. Should not be now.
         return Column(Unicode(250), nullable=True)
 
     @declared_attr
+    @classmethod
     def lastuser_token_scope(cls):
         # Nullable for legacy reasons. Should not be now.
         return Column(Unicode(250), nullable=True)
@@ -118,14 +116,14 @@ class UserBase(BaseMixin):
 
     # Userinfo
     @declared_attr
+    @classmethod
     def userinfo(cls):
         # Userinfo is transient until we get app-level caching into Flask-Lastuser
         return deferred(Column('userinfo', JsonDict, nullable=True))
 
     @classmethod
     def get(cls, username=None, userid=None, defercols=True):
-        """
-        Return a User with the given username or userid.
+        """Return a User with the given username or userid.
 
         :param str username: Username to lookup
         :param str userid: Userid to lookup
@@ -138,7 +136,7 @@ class UserBase(BaseMixin):
 
     @property
     def timezone(self):
-        """The user's timezone as a string"""
+        """The user's timezone as a string."""
         # Stored in userinfo since it was introduced later and a new column
         # will require migrations in downstream apps.
         return (
@@ -149,7 +147,7 @@ class UserBase(BaseMixin):
 
     @property
     def oldids(self):
-        """List of the user's old userids (after merging accounts in Lastuser)"""
+        """List of the user's old userids (after merging accounts in Lastuser)."""
         # Stored in userinfo since it was introduced later and a new column
         # will require migrations in downstream apps. Also, this is an array
         # and will require (a) a joined table, (b) Postgres-specific arrays, or (c) data massaging
@@ -165,13 +163,14 @@ class UserBase(BaseMixin):
     # 1000000 loops, best of 3: 0.229 usec per loop
     @cached_property
     def tz(self):
-        """The user's timezone as a timezone object"""
+        """The user's timezone as a timezone object."""
         if self.timezone:
             return timezone(self.timezone)
+        return None
 
     @property
     def phone(self):
-        """The user's phone number, if verified and present in the scope"""
+        """The user's phone number, if verified and present in the scope."""
         # Stored in userinfo since it was introduced later and a new column
         # will require migrations in downstream apps.
         return self.userinfo and self.userinfo.get('phone')
@@ -184,47 +183,43 @@ class UserBase(BaseMixin):
         return f'<User {self.userid} ({self.username}) "{self.fullname}">'
 
     def merge_accounts(self):
-        """
-        Do nothing. Implemented from UserBase2 onwards.
-        """
+        """Do nothing. Implemented from UserBase2 onwards."""
 
     def organizations_owned(self):
-        """Organizations owned by this user"""
+        """Organizations owned by this user."""
         if (
             self.userinfo
             and self.userinfo.get('organizations')
             and 'owner' in self.userinfo['organizations']
         ):
             return list(self.userinfo['organizations']['owner'])
-        else:
-            return []
+        return []
 
     def organizations_owned_ids(self):
-        """Userids of the organizations owned by this user"""
+        """Userids of the organizations owned by this user."""
         return [org['userid'] for org in self.organizations_owned()]
 
     def user_organizations_owned_ids(self):
-        """Userids of the user and all the organizations owned by this user"""
-        return [self.userid] + self.organizations_owned_ids()
+        """Userids of the user and all the organizations owned by this user."""
+        return [self.userid, *self.organizations_owned_ids()]
 
     def organizations_adminof(self):
-        """Organizations that this user is an admin of"""
+        """Organizations that this user is an admin of."""
         if (
             self.userinfo
             and self.userinfo.get('organizations')
             and 'admin' in self.userinfo['organizations']
         ):
             return list(self.userinfo['organizations']['admin'])
-        else:
-            return []
+        return []
 
     def organizations_adminof_ids(self):
-        """Userids of the organizations this user is an admin of"""
+        """Userids of the organizations this user is an admin of."""
         return [org['userid'] for org in self.organizations_adminof()]
 
     def user_organizations_adminof_ids(self):
-        """Userids of the user and all the organizations the user is an admin of"""
-        return [self.userid] + self.organizations_adminof_ids()
+        """Userids of the user and all the organizations the user is an admin of."""
+        return [self.userid, *self.organizations_adminof_ids()]
 
     def owner_of(self, userid):
         if not isinstance(userid, str):
@@ -253,30 +248,27 @@ class UserBase(BaseMixin):
         return userid in self.team_ids()
 
     def allowner_ids(self):
-        return [self.userid] + self.organizations_owned_ids() + self.team_ids()
+        return [self.userid, *self.organizations_owned_ids(), *self.team_ids()]
 
     @property
     def profile_url(self):
-        """URL to the user's profile. Can be overidden by subclasses"""
+        """URL to the user's profile. Can be overridden by subclasses."""
         return urljoin(current_app.config['LASTUSER_SERVER'], 'account')
 
     @property
     def profile_name(self):
-        """'name' value for the profile linked to this user"""
+        """'name' value for the profile linked to this user."""
         return self.username or self.userid
 
     @property
     def pickername(self):
-        """Label name for this user, for identifying them in dropdown lists"""
+        """Label name for this user, for identifying them in dropdown lists."""
         if self.username:
-            return "{fullname} (@{username})".format(
-                fullname=self.fullname, username=self.username
-            )
-        else:
-            return self.fullname
+            return f"{self.fullname} (@{self.username})"
+        return self.fullname
 
     def organization_links(self):
-        """Links to the user's organizations on the current site"""
+        """Links to the user's organizations on the current site."""
         return []
 
     def owner_choices(self):
@@ -287,9 +279,7 @@ class UserBase(BaseMixin):
         ]
 
     def teamowner_choices(self):
-        """
-        Return userids and titles of user and all teams the user is a member of, grouped by organization.
-        """
+        """Return userids and titles of user and all teams the user is a member of, grouped by organization."""
         orgs = {
             org['userid']: org
             for byorgtype in self.userinfo.get('organizations', {}).values()
@@ -307,8 +297,9 @@ class UserBase(BaseMixin):
                 [
                     (
                         team['userid'],
-                        '%s / %s'
-                        % (orgs.get(orgid, {}).get('title', ''), team['title']),
+                        '{} / {}'.format(
+                            orgs.get(orgid, {}).get('title', ''), team['title']
+                        ),
                     )
                     for team in sorted(teams, key=lambda t: t['title'])
                 ],
@@ -319,9 +310,8 @@ class UserBase(BaseMixin):
         ]
 
     def allowner_choices(self):
-        """
-        Return userids and titles of the user, all organizations owned by the user, and all teams the user
-        is a member of
+        """Return userids and titles of the user, all organizations owned by the user, and all teams the user
+        is a member of.
         """
         orgs = {
             org['userid']: org
@@ -354,8 +344,9 @@ class UserBase(BaseMixin):
                 result.append(
                     (
                         team['userid'],
-                        '%s / %s'
-                        % (orgs.get(orgid, {}).get('title', ''), team['title']),
+                        '{} / {}'.format(
+                            orgs.get(orgid, {}).get('title', ''), team['title']
+                        ),
                     )
                 )
 
@@ -370,7 +361,7 @@ class UserBase(BaseMixin):
 
 
 def _do_merge_into(instance, other, helper_method=None):
-    assert instance != other
+    assert instance != other  # noqa S101
 
     # User id column (for foreign keys)
     id_column = instance.__class__.__table__.c.id  # 'id' is from IdMixin via BaseMixin
@@ -489,47 +480,38 @@ def _do_merge_into(instance, other, helper_method=None):
 
 @declarative_mixin
 class StatusMixin:
-    """
-    Mixin class providing the status column and helper methods.
-    """
+    """Mixin class providing the status column and helper methods."""
 
     @declared_attr
+    @classmethod
     def status(cls):
         return Column(Integer, nullable=False, default=USER_STATUS.ACTIVE)
 
     @property
     def is_active(self):
-        """
-        Is the user active? This is local status, not upstream status from Lastuser.
-        """
+        """Is the user active? This is local status, not upstream status from Lastuser."""
         return self.status == USER_STATUS.ACTIVE
 
     @property
     def is_suspended(self):
-        """
-        Is the user suspended? This is local status, not upstream status from Lastuser.
-        """
+        """Is the user suspended? This is local status, not upstream status from Lastuser."""
         return self.status == USER_STATUS.SUSPENDED
 
     @property
     def is_merged(self):
-        """
-        Is the user merged? This is local status, not upstream status from Lastuser.
-        """
+        """Is the user merged? This is local status, not upstream status from Lastuser."""
         return self.status == USER_STATUS.MERGED
 
 
 @declarative_mixin
 class UserMergeMixin(StatusMixin):
-    """
-    Mixin class adding support for user status and merging. Don't use this mixin
+    """Mixin class adding support for user status and merging. Don't use this mixin
     directly. Use :class:`UserBase2` or a later base class instead.
     """
 
     @classmethod
     def get(cls, username=None, userid=None, defercols=True):
-        """
-        Return a User with the given username or userid. Only active users are
+        """Return a User with the given username or userid. Only active users are
         returned. For merged users, the linked active user is returned.
 
         :param str username: Username to lookup
@@ -541,10 +523,10 @@ class UserMergeMixin(StatusMixin):
             user = user.merged_user()
         if user and user.is_active:
             return user
+        return None
 
     def merged_user(self):
-        """
-        If this account has been merged into another, return that account, else
+        """If this account has been merged into another, return that account, else
         return this. This method queries the upstream Lastuser server since
         data on merged users is not stored locally in a queryable format (ie,
         ``user.userinfo['oldids']`` of the other account).
@@ -556,6 +538,8 @@ class UserMergeMixin(StatusMixin):
             userdata = lastuser.getuser_by_userid(self.userid)
             if userdata:
                 return self.get(userid=userdata['userid'])
+            return None
+        return None
 
     def merge_accounts(self):
         if self.oldids:
@@ -565,9 +549,7 @@ class UserMergeMixin(StatusMixin):
                 olduser.merge_into(self)
 
     def merge_into(self, user):
-        """
-        Merge self into the specified user and relink all
-        """
+        """Merge self into the specified user and relink all."""
         current_app.logger.debug(
             "Preparing to merge {self} into {user}.",
             extra={'self': repr(self), 'user': repr(user)},
@@ -576,7 +558,7 @@ class UserMergeMixin(StatusMixin):
             current_app.logger.debug(
                 "Ignoring merge request because we are already merged."
             )
-            return  # We are already merged, so ignore this call
+            return None  # We are already merged, so ignore this call
 
         safe_to_remove_user = _do_merge_into(self, user, 'migrate_user')
 
@@ -597,8 +579,7 @@ class UserMergeMixin(StatusMixin):
 
 @declarative_mixin
 class UserBase2(UserMergeMixin, UserBase):
-    """
-    Version 2 of UserBase, adding support for user status and merging. Inherits from
+    """Version 2 of UserBase, adding support for user status and merging. Inherits from
     :class:`UserMergeMixin` and :class:`UserBase`.
     """
 
@@ -606,29 +587,33 @@ class UserBase2(UserMergeMixin, UserBase):
 @declarative_mixin
 class TeamMixin(BaseMixin):
     @declared_attr
+    @classmethod
     def userid(cls):
         return Column(String(22), unique=True, nullable=False)
 
     @declared_attr
+    @classmethod
     def orgid(cls):
         return Column(String(22), index=True, nullable=False)
 
     @declared_attr
+    @classmethod
     def title(cls):
         return Column(Unicode(250), nullable=False)
 
     @declared_attr
+    @classmethod
     def owners(cls):
         return Column(Boolean, nullable=False, default=False)
 
     @declared_attr
+    @classmethod
     def users(cls):
         return relationship('User', secondary='users_teams', backref='teams')
 
     @classmethod
     def migrate_user(cls, olduser, newuser):
-        """
-        Substitute the old user's team membership with the new user and return the list of
+        """Substitute the old user's team membership with the new user and return the list of
         tables affected.
         """
         session = cls.query.session
@@ -666,16 +651,12 @@ class TeamMixin(BaseMixin):
 
     @classmethod
     def get(cls, userid):
-        """
-        Get a Team by its userid.
-        """
+        """Get a Team by its userid."""
         return cls.query.filter_by(userid=userid).one_or_none()
 
     def update_from_lastuser(self):
-        """
-        Update information about this team from Lastuser.
-        """
-        pass  # TODO
+        """Update information about this team from Lastuser."""
+        # TODO
 
 
 @declarative_mixin
@@ -686,6 +667,7 @@ class TeamBase(TeamMixin):
 @declarative_mixin
 class TeamMembersMixin:
     @declared_attr
+    @classmethod
     def members(cls):
         return Column(Boolean, nullable=False, default=False)
 
@@ -697,8 +679,7 @@ class TeamBase2(TeamMixin, TeamMembersMixin):
 
 @declarative_mixin
 class ProfileMixin:
-    """
-    ProfileMixin provides methods to assist with creating Profile models (which represent
+    """ProfileMixin provides methods to assist with creating Profile models (which represent
     both User and Organization models), and keeping them updated as user data changes.
 
     ProfileMixin does not provide any columns (apart from aliasing userid to buid).
@@ -707,6 +688,7 @@ class ProfileMixin:
     """
 
     @declared_attr
+    @classmethod
     def userid(cls):
         """Synonym for buid if the model has no existing userid column."""
         return synonym('buid')
@@ -730,8 +712,7 @@ class ProfileMixin:
     def pickername(self):
         if self.userid == self.name:
             return self.title
-        else:
-            return f'{self.title} (@{self.name})'
+        return f'{self.title} (@{self.name})'
 
     def permissions(self, actor, inherited=None):
         parent = super()
@@ -761,8 +742,7 @@ class ProfileMixin:
         make_user_profiles=True,
         make_org_profiles=True,
     ):
-        """
-        Update profiles from the given user and user's organizations.
+        """Update profiles from the given user and user's organizations.
 
         :param user: User account with organization data.
         :param session: Database session (typically db.session).
@@ -786,9 +766,7 @@ class ProfileMixin:
                     profile.userid,
                     maxlength=250,
                     checkused=lambda c: (
-                        True
-                        if session.query(cls.name).filter_by(name=c).first()
-                        else False
+                        bool(session.query(cls.name).filter_by(name=c).first())
                     ),
                 )
 
@@ -810,22 +788,21 @@ class ProfileMixin:
         session.flush()
 
         # Third, make new profiles if required
-        if make_user_profiles:
-            if user.userid not in profiles:
-                if parent is not None:
-                    profile = cls(
-                        userid=user.userid,
-                        name=user.profile_name,
-                        title=user.fullname,
-                        parent=parent,
-                    )
-                else:
-                    profile = cls(
-                        userid=user.userid, name=user.profile_name, title=user.fullname
-                    )
-                if type_user is not None:
-                    setattr(profile, type_col, type_user)
-                session.add(profile)
+        if make_user_profiles and user.userid not in profiles:
+            if parent is not None:
+                profile = cls(
+                    userid=user.userid,
+                    name=user.profile_name,
+                    title=user.fullname,
+                    parent=parent,
+                )
+            else:
+                profile = cls(
+                    userid=user.userid, name=user.profile_name, title=user.fullname
+                )
+            if type_user is not None:
+                setattr(profile, type_col, type_user)
+            session.add(profile)
 
         if make_org_profiles:
             for org in user.organizations_adminof():
@@ -854,11 +831,11 @@ class ProfileMixin:
                     op.merge_into(profile)
 
     def merge_into(self, profile):
-        """
-        Move all data from self to the other profile, typically when merging user
+        """Move all data from self to the other profile, typically when merging user
         accounts. Note that ProfileMixin2.merge_into replaces this method.
         """
-        assert isinstance(profile, ProfileMixin) and profile != self
+        assert isinstance(profile, ProfileMixin)  # noqa S101
+        assert profile != self  # noqa S101
 
         safe_to_remove_profile = _do_merge_into(self, profile, 'migrate_profile')
 
@@ -893,10 +870,10 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
             profile = profile.merged_profile()
         if profile.is_active:
             return profile
+        return None
 
     def merged_profile(self):
-        """
-        If this profile has been merged into another, return that profile, else
+        """If this profile has been merged into another, return that profile, else
         return this. This method queries the upstream Lastuser server since
         data on merged profiles is not stored locally in a queryable format (ie,
         ``user.userinfo['oldids']`` of the other profile's user).
@@ -908,11 +885,11 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
             userdata = lastuser.getuser_by_userid(self.userid)
             if userdata:
                 return self.get(userid=userdata['userid'])
+            return None
+        return None
 
     def update_from_lastuser(self):
-        """
-        Query Lastuser for current details of this userid and update as necessary.
-        """
+        """Query Lastuser for current details of this userid and update as necessary."""
         lastuser = current_app.extensions.get('lastuser') if current_app else None
         if lastuser:
             userinfo = lastuser.getuser_by_userid(self.userid)
@@ -950,13 +927,12 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
                 self.status = USER_STATUS.DELETED
 
     def merge_into(self, profile):
-        """
-        Move all data from self to the other profile, typically when merging user accounts
-        """
+        """Move all data from self to the other profile, typically when merging user accounts."""
         if self.status == USER_STATUS.MERGED:
             return True
 
-        assert isinstance(profile, ProfileMixin2) and profile != self
+        assert isinstance(profile, ProfileMixin2)  # noqa: S101
+        assert profile != self  # noqa: S101
 
         safe_to_remove_profile = _do_merge_into(self, profile, 'migrate_profile')
 
@@ -968,9 +944,7 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
 
     @classmethod
     def update_all_from_lastuser(cls):
-        """
-        Update all profiles from Lastuser
-        """
+        """Update all profiles from Lastuser."""
         for profile in cls.query:
             profile.update_from_lastuser()
             cls.query.session.flush()
@@ -978,15 +952,15 @@ class ProfileMixin2(StatusMixin, ProfileMixin):
 
 @declarative_mixin
 class ProfileBase(ProfileMixin2, BaseNameMixin):
-    """
-    Base class for profiles
-    """
+    """Base class for profiles."""
 
     @declared_attr
+    @classmethod
     def userid(cls):
         return Column(Unicode(22), nullable=False, unique=True)
 
     @declared_attr
+    @classmethod
     def buid(cls):
         """Synonym for userid."""
         return synonym('userid')
@@ -998,24 +972,17 @@ class ProfileBase(ProfileMixin2, BaseNameMixin):
 def make_user_team_table(base, timezone=False):
     if 'users_teams' in base.metadata.tables:
         return base.metadata.tables['users_teams']
-    else:
-        return Table(
-            'users_teams',
-            base.metadata,
-            *(
-                make_timestamp_columns(timezone=timezone)
-                + (
-                    Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
-                    Column('team_id', Integer, ForeignKey('team.id'), primary_key=True),
-                )
-            ),
-        )
+    return Table(
+        'users_teams',
+        base.metadata,
+        *make_timestamp_columns(timezone=timezone),
+        Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
+        Column('team_id', Integer, ForeignKey('team.id'), primary_key=True),
+    )
 
 
 class UserManager(UserManagerBase):
-    """
-    User manager that automatically loads the current user's object from the database.
-    """
+    """User manager that automatically loads the current user's object from the database."""
 
     def __init__(self, db, usermodel, teammodel=None):
         self.db = db
@@ -1044,23 +1011,21 @@ class UserManager(UserManagerBase):
                 .options(undefer(self.__class__.userinfo))
                 .one_or_none()
             )
-        if user is None:
-            if create:
-                user = self.usermodel(userid=userid)
-                if (
-                    uuid
-                    and hasattr(self.usermodel, '__uuid_primary_key__')
-                    and self.usermodel.__uuid_primary_key__
-                ):
-                    user.id = uuid
-                failsafe_add(self.db.session, user, userid=userid)
+        if user is None and create:
+            user = self.usermodel(userid=userid)
+            if (
+                uuid
+                and hasattr(self.usermodel, '__uuid_primary_key__')
+                and self.usermodel.__uuid_primary_key__
+            ):
+                user.id = uuid
+            failsafe_add(self.db.session, user, userid=userid)
         return user
 
     def load_user_by_username(self, username):
         if hasattr(self.usermodel, 'get'):
             return self.usermodel.get(username=username)
-        else:
-            return self.usermodel.query.filter_by(username=username).first()
+        return self.usermodel.query.filter_by(username=username).first()
 
     def make_userinfo(self, user):
         return UserInfo(
@@ -1076,9 +1041,7 @@ class UserManager(UserManagerBase):
         )
 
     def load_user_userinfo(self, userinfo, access_token=None, update=False):
-        """
-        Load a user and update data from the userinfo.
-        """
+        """Load a user and update data from the userinfo."""
         user = self.load_user(
             userid=userinfo['userid'], uuid=userinfo.get('uuid'), create=True
         )
@@ -1155,7 +1118,8 @@ class UserManager(UserManagerBase):
                     user.access_scope
                 ) and orgid in user.organizations_owned_ids():
                     # 1/4: Remove teams that are no longer in lastuser, provided we have
-                    # an authoritative list ('teams' is in scope and the user owns the organization)
+                    # an authoritative list ('teams' is in scope and the user owns the
+                    # organization)
                     removed_teams = (
                         self.teammodel.query.filter_by(orgid=orgid)
                         .filter(
@@ -1193,11 +1157,11 @@ class UserManager(UserManagerBase):
                         if user in team.users:
                             team.users.remove(user)
 
-        # Commit this so that token info is saved even if the user account is an existing account.
-        # This is called before the request is processed by the client app, so there should be no
-        # other data in the transaction
+        # Commit this so that token info is saved even if the user account is an
+        # existing account. This is called before the request is processed by the client
+        # app, so there should be no other data in the transaction
         self.db.session.commit()
-        # Commit this so that token info is saved even if the user account is an existing account.
-        # This is called before the request is processed by the client app, so there should be no
-        # other data in the transaction
+        # Commit this so that token info is saved even if the user account is an
+        # existing account. This is called before the request is processed by the client
+        # app, so there should be no other data in the transaction
         self.db.session.commit()

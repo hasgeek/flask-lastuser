@@ -1,18 +1,15 @@
-"""
-flask_lastuser
-~~~~~~~~~~~~~~
+"""Lastuser extension for Flask."""
 
-Lastuser extension for Flask
-"""
-
+import re
+import uuid
+import weakref
 from collections import OrderedDict
 from datetime import timedelta
 from functools import wraps
 from urllib.parse import quote, urlencode, urljoin, urlsplit
-import re
-import uuid
-import weakref
 
+import itsdangerous
+import requests
 from flask import (
     Response,
     abort,
@@ -28,8 +25,6 @@ from flask import (
 )
 from flask.signals import Namespace
 from flask_babel import Domain
-import itsdangerous
-import requests
 
 from coaster.app import KeyRotationWrapper
 from coaster.auth import add_auth_attribute, current_auth, request_has_auth
@@ -85,7 +80,7 @@ class LastuserTokenAuthError(LastuserError):
 
 
 def randomstring():
-    """Returns a random UUID for use as a state token for CSRF protection"""
+    """Returns a random UUID for use as a state token for CSRF protection."""
     return str(uuid.uuid4())
 
 
@@ -94,9 +89,7 @@ def resource_auth_error(message):
 
 
 class UserInfo:
-    """
-    User info object that is inserted into the context variable container (flask.g)
-    """
+    """User info object that is inserted into the context variable container (flask.g)."""
 
     def __init__(
         self,
@@ -122,9 +115,7 @@ class UserInfo:
 
 
 class UserManagerBase:
-    """
-    Base class for database-aware user managers.
-    """
+    """Base class for database-aware user managers."""
 
     def load_user(self, userid, create=False):
         raise NotImplementedError("Not implemented in the base class")
@@ -139,10 +130,7 @@ class UserManagerBase:
         raise NotImplementedError("Not implemented in the base class")
 
     def before_request(self):
-        """
-        Listener that is called at the start of each request. Responsible for
-        setting current_auth.user and current_auth.lastuserinfo
-        """
+        """Set `current_auth.user` and `current_auth.lastuserinfo`."""
         user = None
         add_auth_attribute('lastuserinfo', None)
         user_from_token = False
@@ -217,31 +205,25 @@ class UserManagerBase:
             # TODO: In future, restrict to access token's scope
             add_auth_attribute('access_scope', ['*'])
             add_auth_attribute('lastuserinfo', self.make_userinfo(user))
-            if not user_from_token:
-                if current_auth.cookie.get('userid') != user.userid:
-                    # Merged account loaded. Switch over
-                    current_auth.cookie['userid'] = user.userid
+            if not user_from_token and current_auth.cookie.get('userid') != user.userid:
+                # Merged account loaded. Switch over
+                current_auth.cookie['userid'] = user.userid
 
         # This will be set to True by the various login_required handlers downstream
         add_auth_attribute('login_required', False)
         signal_user_looked_up.send(current_auth.user)
 
     def login_listener(self, userinfo, token):
-        """
-        Listener that is called when a user logs in. ``userinfo`` and ``token``
+        """Listener that is called when a user logs in. ``userinfo`` and ``token``
         are dictionaries containing data received from Lastuser.
         """
         self.before_request()
 
     def update_teams(self, user):
-        """
-        Update team data from this user's access token, if applicable.
-        """
+        """Update team data from this user's access token, if applicable."""
 
     def user_emails(self, user):
-        """
-        Retrieve all known email addresses for the given user.
-        """
+        """Retrieve all known email addresses for the given user."""
         result = self.lastuser.call_resource(
             'email',
             all=1,
@@ -251,13 +233,10 @@ class UserManagerBase:
 
         if result.get('status') == 'ok':
             return result['result']['all']
-        else:
-            return []
+        return []
 
     def user_phones(self, user):
-        """
-        Retrieve all known phone numbers for the given user.
-        """
+        """Retrieve all known phone numbers for the given user."""
         result = self.lastuser.call_resource(
             'phone',
             all=1,
@@ -267,14 +246,11 @@ class UserManagerBase:
 
         if result.get('status') == 'ok':
             return result['result']['all']
-        else:
-            return []
+        return []
 
 
 class Lastuser:
-    """
-    Flask extension for Lastuser
-    """
+    """Flask extension for Lastuser."""
 
     def __init__(self, app=None, cache=None):
         self.cache = cache
@@ -317,7 +293,7 @@ class Lastuser:
         # TODO: Implement `self._load_user` that does the same as `before_request`
 
         if 'cache' in app.extensions and isinstance(app.extensions['cache'], dict):
-            for c in app.extensions['cache'].keys():
+            for c in app.extensions['cache']:
                 if c.with_jinja2_ext:
                     # Main application cache. Use it.
                     self.init_cache(app, c)
@@ -436,8 +412,7 @@ class Lastuser:
             self.usermanager.before_request()
 
     def after_request(self, response):
-        """
-        Save login status cookie and tell proxies to not publicly cache pages.
+        """Save login status cookie and tell proxies to not publicly cache pages.
         If you are using Flask-Lastuser, your app takes user logins, and pages
         for a user should not be cached by proxies.
 
@@ -486,9 +461,7 @@ class Lastuser:
         return response
 
     def requires_login(self, f):
-        """
-        Decorator for functions that require login.
-        """
+        """Decorator for functions that require login."""
 
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -508,9 +481,7 @@ class Lastuser:
         return decorated_function
 
     def permissions(self):
-        """
-        Return all permissions available to user.
-        """
+        """Return all permissions available to user."""
         return (
             current_auth.lastuserinfo is not None
             and current_auth.lastuserinfo.permissions
@@ -518,8 +489,7 @@ class Lastuser:
         )
 
     def has_permission(self, permission):
-        """
-        Returns True if the current user has the specified permission.
+        """Returns True if the current user has the specified permission.
 
         :param permission: Permission to check for. If multiple permissions are passed,
             any of them may match.
@@ -527,12 +497,10 @@ class Lastuser:
         """
         if is_collection(permission):
             return bool(set(permission) & set(self.permissions()))
-        else:
-            return permission in self.permissions()
+        return permission in self.permissions()
 
     def requires_permission(self, permission):
-        """
-        Decorator that checks if the user has a certain permission from Lastuser. Uses
+        """Decorator that checks if the user has a certain permission from Lastuser. Uses
         :meth:`has_permission` to check if the permission is available.
         """
 
@@ -556,8 +524,7 @@ class Lastuser:
         return inner
 
     def requires_scope(self, *scope):
-        """
-        Decorator that checks if the user's access token includes the specified scope.
+        """Decorator that checks if the user's access token includes the specified scope.
         If not present, it redirects the user to Lastuser to request access rights.
         """
 
@@ -592,9 +559,7 @@ class Lastuser:
         return inner
 
     def login_handler(self, f):
-        """
-        Decorator for login handler route.
-        """
+        """Decorator for login handler route."""
 
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -614,21 +579,16 @@ class Lastuser:
                     return redirect(
                         request.url + '&cookietest=1&next=' + quote(next_url)
                     )
-                else:
-                    return redirect(
-                        request.url + '?cookietest=1&next=' + quote(next_url)
-                    )
-            else:
-                if session.new:
-                    # No support for cookies. Abort login
-                    return self._auth_error_handler(
-                        'no_cookies',
-                        error_description="Your browser must accept cookies for you to login.",
-                        error_uri="",
-                    )
-                else:
-                    # The 'cookies' key is not needed anymore
-                    session.pop('cookies', None)
+                return redirect(request.url + '?cookietest=1&next=' + quote(next_url))
+            if session.new:
+                # No support for cookies. Abort login
+                return self._auth_error_handler(
+                    'no_cookies',
+                    error_description="Your browser must accept cookies for you to login.",
+                    error_uri="",
+                )
+            # The 'cookies' key is not needed anymore
+            session.pop('cookies', None)
 
             scope = data.get('scope', 'id')
             message = data.get('message') or request.args.get('message')
@@ -639,9 +599,7 @@ class Lastuser:
         self._login_handler = f
         return decorated_function
 
-    def _login_handler_internal(
-        self, scope, next, message=None, metarefresh=False  # NOQA: A002
-    ):
+    def _login_handler_internal(self, scope, next, message=None, metarefresh=False):  # noqa: A002
         if not self._redirect_uri_name:
             raise LastuserConfigError("No authorization handler defined")
         config = current_app.lastuser_config
@@ -667,24 +625,20 @@ class Lastuser:
         )
         if not metarefresh:
             return redirect(login_redirect_url)
-        else:
-            return Response(
-                '''<!DOCTYPE html>
-                <html><head><title>Redirecting…</title><meta http-equiv="refresh" content="0; {url}" /></head>
-                <body><a href="{url}">Logging you in…</a></body></html>'''.format(
-                    url=login_redirect_url
-                ),
-                200,
-                {
-                    'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
-                    'Cache-Control': 'private, no-cache',
-                },
-            )
+        return Response(
+            f'''<!DOCTYPE html>
+            <html><head><title>Redirecting…</title>
+            <meta http-equiv="refresh" content="0; {login_redirect_url}" /></head>
+            <body><a href="{login_redirect_url}">Logging you in…</a></body></html>''',
+            200,
+            {
+                'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT',
+                'Cache-Control': 'private, no-cache',
+            },
+        )
 
     def logout_handler(self, f):
-        """
-        Decorator for logout handler route.
-        """
+        """Decorator for logout handler route."""
 
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -693,7 +647,7 @@ class Lastuser:
             add_auth_attribute('lastuserinfo', None)
             current_auth.cookie.pop('sessionid', None)
             current_auth.cookie.pop('userid', None)
-            if not (next_url.startswith('http:') or next_url.startswith('https:')):
+            if not (next_url.startswith(('http:', 'https:'))):
                 next_url = urljoin(request.url_root, next_url)
             config = current_app.lastuser_config
             return Response(
@@ -701,8 +655,9 @@ class Lastuser:
                 <html><head><meta http-equiv="refresh" content="0; {url}" /></head>
                 <body><a href="{url}">Logging you out…</a></body></html>'''.format(
                     url=urljoin(config['lastuser_server'], config['logout_endpoint'])
-                    + '?client_id=%s&next=%s'
-                    % (quote(config['client_id']), quote(next_url))
+                    + '?client_id={}&next={}'.format(
+                        quote(config['client_id']), quote(next_url)
+                    )
                 ),
                 200,
                 {
@@ -714,8 +669,7 @@ class Lastuser:
         return decorated_function
 
     def auth_handler(self, f):
-        """
-        Set the login cookies.
+        """Set the login cookies.
 
         This method closely resembles :meth:`login_from_cookie`.
         """
@@ -758,6 +712,7 @@ class Lastuser:
                     'grant_type': 'authorization_code',
                     'scope': self._login_handler().get('scope', ''),
                 },
+                timeout=30,
             )
             result = r.json()
 
@@ -799,8 +754,7 @@ class Lastuser:
         return decorated_function
 
     def login_from_cookie(self, userid):
-        """
-        This user has just showed up with a cookie set by lastuser, but with no
+        """This user has just showed up with a cookie set by lastuser, but with no
         internal record. We treat it like a login now.
 
         This method closely resembles :meth:`auth_handler`.
@@ -815,12 +769,13 @@ class Lastuser:
                 'grant_type': 'client_credentials',
                 'scope': self._login_handler().get('scope', ''),
             },
+            timeout=30,
         )
         result = r.json()
 
         if 'error' in result:
             # Lastuser doesn't like us. Maybe we're not a trusted app. Ignore and move on.
-            return
+            return None
 
         if 'messages' in result:
             for item in result['messages']:
@@ -836,11 +791,10 @@ class Lastuser:
         current_auth.cookie['userid'] = userinfo['userid']
         if self.usermanager:
             return self.usermanager.login_listener(userinfo, token)
+        return None
 
     def auth_error_handler(self, f):
-        """
-        Handler for authorization errors
-        """
+        """Handler for authorization errors."""
 
         @wraps(f)
         def decorated_function(error, error_description=None, error_uri=None):
@@ -850,8 +804,7 @@ class Lastuser:
         return decorated_function
 
     def notification_handler(self, f):
-        """
-        Handler for service requests from Lastuser, used to notify of new
+        """Handler for service requests from Lastuser, used to notify of new
         resource access tokens and user info changes.
         """
 
@@ -864,13 +817,14 @@ class Lastuser:
             if not ('userid' in request.form and 'changes' in request.form):
                 abort(400)
             # Step 3. Is it a logout request?
-            if 'logout' in request.form['changes']:
-                if self.cache and 'sessionid' in request.form:
-                    self.cache.delete(
-                        ('lastuser/session/' + request.form['sessionid']).encode(
-                            'utf-8'
-                        )
-                    )
+            if (
+                'logout' in request.form['changes']
+                and self.cache
+                and 'sessionid' in request.form
+            ):
+                self.cache.delete(
+                    ('lastuser/session/' + request.form['sessionid']).encode('utf-8')
+                )
             # Step 4. Look up user account locally. It has to exist
             user = self.usermanager.load_user(request.form['userid'])
             if not user:
@@ -883,9 +837,7 @@ class Lastuser:
         return decorated_function
 
     def endpoint_url(self, endpoint):
-        """
-        Returns the full URL to a given endpoint path on the current Lastuser server.
-        """
+        """Returns the full URL to a given endpoint path on the current Lastuser server."""
         return urljoin(current_app.lastuser_config['lastuser_server'], endpoint)
 
     @property
@@ -910,13 +862,12 @@ class Lastuser:
         )
         if r.status_code in (400, 500, 401):
             raise LastuserApiError("Call to %s returned %d" % (endpoint, r.status_code))
-        elif r.status_code in (200, 201, 202, 203):
+        if r.status_code in (200, 201, 202, 203):
             return r.json()
-        else:
-            raise LastuserApiError(
-                "Call to %s returned unknown status %d and response %s "
-                % (endpoint, r.status_code, r.text)
-            )
+        raise LastuserApiError(
+            "Call to %s returned unknown status %d and response %s "
+            % (endpoint, r.status_code, r.text)
+        )
 
     def sync_resources(self):
         return self._lastuser_api_call(
@@ -925,14 +876,13 @@ class Lastuser:
         )
 
     def resource_handler(self, name, description="", siteresource=False):
-        """
-        Decorator for resource handlers. Verifies tokens and passes info on
+        """Decorator for resource handlers. Verifies tokens and passes info on
         the user and calling client.
         """
 
         def inner(f):
             @wraps(f)
-            def decorated_function(*args, **kw):
+            def decorated_function(*_args, **_kw):
                 return
                 # FIXME: resource_handler no longer works
 
@@ -952,8 +902,7 @@ class Lastuser:
         )
         if (not result) or ('error' in result):
             return None
-        else:
-            return result
+        return result
 
     # TODO: Map to app users if present. Check with UserManager
     def getusers(self, names):
@@ -962,8 +911,7 @@ class Lastuser:
         )
         if (not result) or ('error' in result):
             return None
-        else:
-            return result['results']
+        return result['results']
 
     # TODO: Map to app user if present. Check with UserManager
     def getuser_by_userid(self, userid):
@@ -972,8 +920,7 @@ class Lastuser:
         )
         if (not result) or ('error' in result):
             return None
-        else:
-            return result
+        return result
 
     # TODO: Map to app user if present. Check with UserManager
     def getuser_by_userids(self, userids):
@@ -982,15 +929,13 @@ class Lastuser:
         )
         if (not result) or ('error' in result):
             return None
-        else:
-            return result['results']
+        return result['results']
 
     def external_resource(self, app, name, endpoint, method):
-        """
-        Register an external resource.
-        """
+        """Register an external resource."""
         if method not in ['GET', 'PUT', 'POST', 'DELETE']:
-            raise LastuserError("Unknown HTTP method '%s'" % method)
+            msg = f"Unknown HTTP method '{method}'"
+            raise LastuserError(msg)
         app.lastuser_config['external_resources'][name] = {
             'endpoint': endpoint,
             'method': method,
@@ -1007,9 +952,7 @@ class Lastuser:
         _token_type=None,
         **kw,
     ):
-        """
-        Call an external resource.
-        """
+        """Call an external resource."""
         resource_details = current_app.lastuser_config['external_resources'][name]
 
         if _token is None:
@@ -1023,20 +966,16 @@ class Lastuser:
 
         if _token_type is None:
             raise LastuserResourceError("Token type not provided")
-        if _token_type != 'bearer':
+        if _token_type != 'bearer':  # noqa: S105
             raise LastuserResourceError("Unsupported token type")
 
-        if headers is None:
-            headers = {}
-        else:
-            # Make a copy before modifying
-            headers = dict(headers)
-        headers['Authorization'] = 'Bearer %s' % _token
+        headers = {} if headers is None else dict(headers)
+        headers['Authorization'] = f'Bearer {_token}'
 
         try:
             if resource_details['method'] == 'GET':
                 r = requests.get(
-                    resource_details['endpoint'], headers=headers, params=kw
+                    resource_details['endpoint'], headers=headers, params=kw, timeout=30
                 )
             else:
                 r = requests.request(
@@ -1047,29 +986,23 @@ class Lastuser:
                     files=files,
                 )
         except requests.exceptions.RequestException as e:
-            raise LastuserResourceConnectionError(
-                "Could not connect to the server. Connection error: %s" % e
-            )
+            msg = f"Could not connect to the server. Connection error: {e}"
+            raise LastuserResourceConnectionError(msg) from None
         # Parse the result
         if r.status_code not in (200, 201, 202, 203):
             # XXX: What other status codes could we possibly get from a REST call?
             raise LastuserResourceError("Resource returned status %d" % r.status_code)
         if _raw:
             return r
-        else:
-            return (r.json()) or r.text
+        return (r.json()) or r.text
 
     def user_emails(self, user):
-        """
-        Retrieve all known email addresses for the given user.
-        """
+        """Retrieve all known email addresses for the given user."""
         # TODO: If this is ever cached, provide a way to flush cache
         return self.usermanager.user_emails(user)
 
     def teams(self, user=None):
-        """
-        All teams the user has access to.
-        """
+        """All teams the user has access to."""
         if user:
             token = user.lastuser_token
             token_type = user.lastuser_token_type
@@ -1080,13 +1013,10 @@ class Lastuser:
 
         if result['status'] == 'ok':
             return result['result']['teams']
-        else:
-            return []
+        return []
 
     def session_verify(self, sessionid, user=None):
-        """
-        Verify the user's session.
-        """
+        """Verify the user's session."""
         if user:
             token = user.lastuser_token
             token_type = user.lastuser_token_type
@@ -1112,9 +1042,7 @@ class Lastuser:
         return {'active': False}
 
     def update_user(self, user):
-        """
-        Update user details from Lastuser.
-        """
+        """Update user details from Lastuser."""
         if not user.lastuser_token:
             # We don't have a token, so first we obtain one. This call only works if
             # we are a trusted app.
@@ -1128,13 +1056,14 @@ class Lastuser:
                     'grant_type': 'client_credentials',
                     'scope': self._login_handler().get('scope', ''),
                 },
+                timeout=30,
             )
             result = r.json()
 
             if 'error' in result:
-                # Lastuser doesn't like us. Maybe we're not a trusted app.
+                # Lastuser does not like us. Maybe we're not a trusted app.
                 # Return without updating.
-                return
+                return None
 
             user.lastuser_token = result.get('access_token')
             user.lastuser_token_type = result.get('token_type')

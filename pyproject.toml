@@ -25,95 +25,76 @@ exclude = '''
 '''
 
 [tool.ruff]
-# This is a slight customisation of the default rules
-# 1. Rule E402 (module-level import not top-level) is disabled as isort handles it
-# 2. Rule E501 (line too long) is left to Black; some strings are worse for wrapping
-
-# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
-lint.select = ["E", "F"]
-lint.ignore = ["E402", "E501"]
-
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-lint.fixable = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "I",
-  "N",
-  "Q",
-  "S",
-  "T",
-  "W",
-  "ANN",
-  "ARG",
-  "BLE",
-  "COM",
-  "DJ",
-  "DTZ",
-  "EM",
-  "ERA",
-  "EXE",
-  "FBT",
-  "ICN",
-  "INP",
-  "ISC",
-  "NPY",
-  "PD",
-  "PGH",
-  "PIE",
-  "PL",
-  "PT",
-  "PTH",
-  "PYI",
-  "RET",
-  "RSE",
-  "RUF",
-  "SIM",
-  "SLF",
-  "TCH",
-  "TID",
-  "TRY",
-  "UP",
-  "YTT",
-]
-lint.unfixable = []
-
-# Exclude a variety of commonly ignored directories.
-exclude = [
-  ".bzr",
-  ".direnv",
-  ".eggs",
-  ".git",
-  ".hg",
-  ".mypy_cache",
-  ".nox",
-  ".pants.d",
-  ".pytype",
-  ".ruff_cache",
-  ".svn",
-  ".tox",
-  ".venv",
-  "__pypackages__",
-  "_build",
-  "buck-out",
-  "build",
-  "dist",
-  "node_modules",
-  "venv",
-]
 
 # Same as Black.
 line-length = 88
 
-# Allow unused variables when underscore-prefixed.
-lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-
 # Target Python 3.9
 target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+  "A",
+  "ARG",
+  "ASYNC",
+  "B",
+  "BLE",
+  "C",
+  "C4",
+  "E",
+  "EM",
+  "EXE",
+  "F",
+  "FA",
+  "G",
+  "I",
+  "INP",
+  "INT",
+  "ISC",
+  "N",
+  "PIE",
+  "PT",
+  "PYI",
+  "RET",
+  "RUF",
+  "S",
+  "SIM",
+  "SLOT",
+  "T20",
+  "TRIO",
+  "UP",
+  "W",
+  "YTT",
+]
+ignore = [
+  "ARG002",
+  "C901",
+  "D105",
+  "D106",
+  "D107",
+  "D203",
+  "D212",
+  "D213",
+  "E402",
+  "E501",
+  "EM101",
+  "EM102",
+  "ISC001",
+]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**.py" = [
+  "S101",   # Allow assert
+  "ANN001", # Args don't need types (usually fixtures)
+  "N802",   # Fixture returning a class may be named per class name convention
+  "N803",   # Args don't require naming convention (fixture could be a class)
+  "INP001", # Don't need `__init__.py` in tests/
+]
+"docs/**.py" = ["INP001", "RUF012"]
 
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
@@ -137,3 +118,7 @@ section-order = [
 [tool.ruff.lint.flake8-pytest-style]
 fixture-parentheses = false
 mark-parentheses = false
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "preserve"

@@ -22,7 +22,7 @@ class TestMergeUserData(unittest.TestCase):
         # These settings are not required for merge user tests
         self.app.config['LASTUSER_SERVER'] = 'http://lastuser.testing'
         self.app.config['LASTUSER_CLIENT_ID'] = 'client_id'
-        self.app.config['LASTUSER_CLIENT_SECRET'] = 'client_secret'
+        self.app.config['LASTUSER_CLIENT_SECRET'] = 'client_secret'  # noqa S105
         self.app.config['LASTUSER_SECRET_KEYS'] = ['random_key']
 
         self.lastuser = Lastuser(self.app)
@@ -168,11 +168,15 @@ class TestWithoutMerge(TestMergeUserData):
     def test_profiles_exist(self):
         profiles = Profile.query.all()
         # Six profiles (3 users + 3 orgs)
-        self.assertEqual(len(profiles), 6)
-        self.assertEqual(
-            {profile.name for profile in profiles},
-            {'user1', 'user2', 'user3', 'org1', 'org2', 'org3'},
-        )
+        assert len(profiles) == 6
+        assert {profile.name for profile in profiles} == {
+            'user1',
+            'user2',
+            'user3',
+            'org1',
+            'org2',
+            'org3',
+        }
 
     def test_team_users(self):
         user1 = User.query.filter_by(userid="1234567890123456789012").one()
@@ -183,13 +187,13 @@ class TestWithoutMerge(TestMergeUserData):
         team2 = Team.query.filter_by(userid="0897867564534231243546").one()
         team3 = Team.query.filter_by(userid="1324354657687980132435").one()
 
-        self.assertTrue(user1.is_active)
-        self.assertTrue(user1.is_active)
-        self.assertTrue(user1.is_active)
+        assert user1.is_active
+        assert user1.is_active
+        assert user1.is_active
 
-        self.assertEqual(set(team1.users), {user1, user2})
-        self.assertEqual(set(team2.users), {user2, user3})
-        self.assertEqual(set(team3.users), {user3, user1})
+        assert set(team1.users) == {user1, user2}
+        assert set(team2.users) == {user2, user3}
+        assert set(team3.users) == {user3, user1}
 
 
 class TestUserMerge(TestMergeUserData):
@@ -217,36 +221,36 @@ class TestUserMerge(TestMergeUserData):
         super().tearDown()
 
     def test_merge_removes_username(self):
-        self.assertEqual(self.user1.username, 'user1')
-        self.assertIsNone(self.user2.username)
-        self.assertEqual(self.user3.username, 'user3')
+        assert self.user1.username == 'user1'
+        assert self.user2.username is None
+        assert self.user3.username == 'user3'
 
     def test_merge_removes_email(self):
-        self.assertEqual(self.user1.email, 'user1@example.com')
-        self.assertIsNone(self.user2.email)
-        self.assertEqual(self.user3.email, 'user3@example.com')
+        assert self.user1.email == 'user1@example.com'
+        assert self.user2.email is None
+        assert self.user3.email == 'user3@example.com'
 
     def test_user_is_merged(self):
-        self.assertFalse(self.user1.is_merged)
-        self.assertTrue(self.user2.is_merged)
-        self.assertFalse(self.user3.is_merged)
+        assert not self.user1.is_merged
+        assert self.user2.is_merged
+        assert not self.user3.is_merged
 
     def test_teams_user2_is_removed(self):
         # Was [user1, user2], but user2 is merged into user1 and so redundant
-        self.assertEqual(set(self.team1.users), {self.user1})
+        assert set(self.team1.users) == {self.user1}
         # Was [user2, user3], but user2 is replaced with user1
-        self.assertEqual(set(self.team2.users), {self.user1, self.user3})
+        assert set(self.team2.users) == {self.user1, self.user3}
         # Was and is [user3, user1]. user2 is not involved here
-        self.assertEqual(set(self.team3.users), {self.user3, self.user1})
+        assert set(self.team3.users) == {self.user3, self.user1}
 
     def test_user_get_username(self):
         user1 = User.get(username='user1')
         user2 = User.get(username='user2')
         user3 = User.get(username='user3')
 
-        self.assertEqual(user1, self.user1)
-        self.assertIsNone(user2)  # Username doesn't exist anymore
-        self.assertEqual(user3, self.user3)
+        assert user1 == self.user1
+        assert user2 is None  # Username doesn't exist anymore
+        assert user3 == self.user3
 
     @mocketize
     def test_user_get_userid(self):
@@ -276,15 +280,15 @@ class TestUserMerge(TestMergeUserData):
         user2 = User.get(userid="0987654321098765432109")
         user3 = User.get(userid="1234567890987654321234")
 
-        self.assertEqual(user1, self.user1)
-        self.assertEqual(user2, self.user1)  # Merged, so returns .merged_user()
-        self.assertEqual(user3, self.user3)
+        assert user1 == self.user1
+        assert user2 == self.user1  # Merged, so returns .merged_user()
+        assert user3 == self.user3
 
     def test_profile_merged(self):
         profile1 = Profile.query.filter_by(userid=self.user1.userid).first()
         profile2 = Profile.query.filter_by(userid=self.user2.userid).first()
         profile3 = Profile.query.filter_by(userid=self.user3.userid).first()
 
-        self.assertFalse(profile1.is_merged)
-        self.assertTrue(profile2.is_merged)
-        self.assertFalse(profile3.is_merged)
+        assert not profile1.is_merged
+        assert profile2.is_merged
+        assert not profile3.is_merged
