@@ -984,6 +984,7 @@ class Lastuser:
                     headers=headers,
                     data=data if data is not None else kw,
                     files=files,
+                    timeout=30,
                 )
         except requests.exceptions.RequestException as e:
             msg = f"Could not connect to the server. Connection error: {e}"
