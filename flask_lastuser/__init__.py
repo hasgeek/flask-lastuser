@@ -339,6 +339,7 @@ class Lastuser:
         app.lastuser_config['use_sessions'] = app.config.get(
             'LASTUSER_USE_SESSIONS', True
         )
+        app.lastuser_config['verify_tls'] = app.config.get('LASTUSER_VERIFY_TLS', True)
 
         if 'LASTUSER_SECRET_KEYS' not in app.config:
             app.logger.warning("LASTUSER_SECRET_KEYS not found in config")
@@ -713,6 +714,7 @@ class Lastuser:
                     'scope': self._login_handler().get('scope', ''),
                 },
                 timeout=30,
+                verify=config['verify_tls'],
             )
             result = r.json()
 
@@ -770,6 +772,7 @@ class Lastuser:
                 'scope': self._login_handler().get('scope', ''),
             },
             timeout=30,
+            verify=config['verify_tls'],
         )
         result = r.json()
 
@@ -854,11 +857,14 @@ class Lastuser:
 
     def _lastuser_api_call(self, endpoint, method='POST', **kwargs):
         config = current_app.lastuser_config
-        r = {'GET': requests.get, 'POST': requests.post}[method](
+        r = requests.request(
+            method,
             self.endpoint_url(endpoint),
             auth=(config['client_id'], config['client_secret']),
             data=kwargs,
             headers={'Accept': 'application/json'},
+            timeout=30,
+            verify=config['verify_tls'],
         )
         if r.status_code in (400, 500, 401):
             raise LastuserApiError("Call to %s returned %d" % (endpoint, r.status_code))
@@ -975,7 +981,11 @@ class Lastuser:
         try:
             if resource_details['method'] == 'GET':
                 r = requests.get(
-                    resource_details['endpoint'], headers=headers, params=kw, timeout=30
+                    resource_details['endpoint'],
+                    headers=headers,
+                    params=kw,
+                    timeout=30,
+                    verify=current_app.lastuser_config['verify_tls'],
                 )
             else:
                 r = requests.request(
@@ -985,6 +995,7 @@ class Lastuser:
                     data=data if data is not None else kw,
                     files=files,
                     timeout=30,
+                    verify=current_app.lastuser_config['verify_tls'],
                 )
         except requests.exceptions.RequestException as e:
             msg = f"Could not connect to the server. Connection error: {e}"
@@ -1058,6 +1069,7 @@ class Lastuser:
                     'scope': self._login_handler().get('scope', ''),
                 },
                 timeout=30,
+                verify=config['verify_tls'],
             )
             result = r.json()
 
