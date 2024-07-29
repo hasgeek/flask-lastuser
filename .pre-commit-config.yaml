@@ -2,12 +2,12 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.16.0
+    rev: v3.17.0
     hooks:
       - id: pyupgrade
         args: ['--keep-runtime-typing', '--py39-plus']
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.10
+    rev: v0.5.5
     hooks:
       - id: ruff
         args: ['--fix', '--exit-non-zero-on-fix']
