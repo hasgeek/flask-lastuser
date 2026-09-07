@@ -486,8 +486,7 @@ class Lastuser:
         return (
             current_auth.lastuserinfo is not None
             and current_auth.lastuserinfo.permissions
-            or []
-        )
+        ) or []
 
     def has_permission(self, permission):
         """Returns True if the current user has the specified permission.
