@@ -34,17 +34,17 @@ from coaster.utils import LabeledEnum, getbool, make_name, require_one_of
 from . import UserInfo, UserManagerBase, __, signal_user_looked_up
 
 __all__ = [
-    'UserBase',
-    'UserBase2',
-    'TeamMixin',
-    'TeamMembersMixin',
-    'TeamBase',
-    'TeamBase2',
+    'IncompleteUserMigrationError',
+    'ProfileBase',
     'ProfileMixin',
     'ProfileMixin2',
-    'ProfileBase',
+    'TeamBase',
+    'TeamBase2',
+    'TeamMembersMixin',
+    'TeamMixin',
+    'UserBase',
+    'UserBase2',
     'UserManager',
-    'IncompleteUserMigrationError',
 ]
 
 
@@ -140,10 +140,8 @@ class UserBase(BaseMixin):
         # Stored in userinfo since it was introduced later and a new column
         # will require migrations in downstream apps.
         return (
-            self.userinfo
-            and self.userinfo.get('timezone')
-            or current_app.config.get('TIMEZONE')
-        )
+            self.userinfo and self.userinfo.get('timezone')
+        ) or current_app.config.get('TIMEZONE')
 
     @property
     def oldids(self):
@@ -152,7 +150,7 @@ class UserBase(BaseMixin):
         # will require migrations in downstream apps. Also, this is an array
         # and will require (a) a joined table, (b) Postgres-specific arrays, or (c) data massaging
         # by joining with spaces, like "access_scope" above.
-        return self.userinfo and self.userinfo.get('oldids') or []
+        return (self.userinfo and self.userinfo.get('oldids')) or []
 
     # Use cached_property here because pytz.timezone is relatively slow:
     #
@@ -765,8 +763,8 @@ class ProfileMixin:
                 profile.name = make_name(
                     profile.userid,
                     maxlength=250,
-                    checkused=lambda c: (
-                        bool(session.query(cls.name).filter_by(name=c).first())
+                    checkused=lambda c: bool(
+                        session.query(cls.name).filter_by(name=c).first()
                     ),
                 )
 
